@@ -37,7 +37,7 @@ extern "C" {
 * \{
 */
 
-#define NAS_SWITCH_CFG_DEFAULT_PATH "/etc/opt/dell/os10/switch.xml"
+#define NAS_SWITCH_CFG_DEFAULT_PATH "/etc/opx/switch.xml"
 
 /**
  * \file This file contains the standard switch mapping.  The switch mapping will be static in the initial release but
