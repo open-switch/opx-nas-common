@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright (c) 2015 Dell Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -13,6 +13,7 @@
 # See the Apache Version 2.0 License for specific language governing
 # permissions and limitations under the License.
 
-export PYTHONPATH=/usr/lib/opx:/usr/lib/x86_64-linux-gnu/opx
+export LD_LIBRARY_PATH=/usr/lib/opx:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib
+export PYTHONPATH=/usr/lib/opx  
 
-/usr/bin/python opx-switch-shell "$*"
+/usr/bin/opx-switch-shell "$*"
