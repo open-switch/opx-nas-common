@@ -28,6 +28,7 @@
 
 #include "std_error_codes.h"
 #include "ds_common_types.h"
+#include "dell-base-interface-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +46,9 @@ typedef enum  {
     nas_int_type_VLAN=1,
     nas_int_type_LAG=2,
     nas_int_type_CPU=3,
-    nas_int_type_LPBK=4
+    nas_int_type_LPBK=4,
+    nas_int_type_FC=5,
+    nas_int_type_MGMT=6, /* Management interface type */
 }nas_int_type_t;
 
 /*!
@@ -80,6 +83,9 @@ typedef struct _interface_ctrl_s{
 
     //these fields should be filled in
     nas_int_type_t int_type;    //!the interface type
+
+    //the sub_type value is of type BASE_IF_XXX_TYPE_t based on int_type
+    unsigned int int_sub_type;  //!the interface sub type
 
     //must be unique
     hal_vrf_id_t vrf_id;    //! VRF id

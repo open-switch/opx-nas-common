@@ -156,12 +156,12 @@ t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index
             cps_api_object_it_t it;
             cps_api_object_it_begin(obj,&it);
             cps_api_object_attr_t attr = cps_api_object_it_find(&it, DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_IF_INDEX);
-            if (!attr) {
-               return  STD_ERR(INTERFACE, FAIL, 0);
+            if (attr) {
+                *lag_if_index = cps_api_object_attr_data_u32(attr);
+                 return STD_ERR_OK;
             }
-            *lag_if_index = cps_api_object_attr_data_u32(attr);
         }
     }
-    return(STD_ERR_OK);
+    return STD_ERR(INTERFACE,FAIL,0);
 }
 

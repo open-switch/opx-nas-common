@@ -27,6 +27,9 @@
 #include "std_envvar.h"
 #include "std_utils.h"
 #include "event_log.h"
+#include "cps_api_operation.h"
+#include "nas_sw_profile_api.h"
+#include "nas_sw_profile.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -36,8 +39,13 @@ static bool failed = false;
 
 static nas_switches_t switches;
 static size_t num_switches = 0;
+static bool nas_sw_fc_supported = 0;
 
 static nas_switch_detail_t *switch_cfg;
+
+bool nas_switch_get_fc_supported(void) {
+    return nas_sw_fc_supported;
+}
 
 size_t nas_switch_get_max_npus(void) {
     return num_switches;
@@ -106,6 +114,27 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         num_switches += switch_cfg[switch_ix].number_of_npus;
 
     }
+    if (strncmp(name,"switch_feature", strlen(name))==0) {
+        const char * status = std_config_attr_get(node,"fc_enabled");
+        if (status == NULL) {
+            EV_LOGGING(NAS_COM, ERR, "SWITCH","fc_enabled not present in %s",switch_cfg_path);
+            return;
+        }
+        nas_sw_fc_supported = atoi(status);
+        EV_LOGGING(NAS_COM, INFO, "SWITCH","fc_enabled %d",nas_sw_fc_supported);
+    }
+    if (strncmp(name,"switch_profile", strlen(name))==0) {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch profile info");
+        nas_switch_update_profile_info(node);
+    }
+    if (strncmp(name,"switch_forwarding_mode", strlen(name))==0) {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch UFT info");
+        nas_switch_update_uft_info(node);
+    }
+    if (strncmp(name,"switch_ecmp", strlen(name))==0) {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch ECMP info");
+        nas_switch_update_ecmp_info(node);
+    }
 
 }
 
@@ -127,6 +156,15 @@ t_std_error nas_switch_init(void) {
 
     std_config_unload(h);
     if (failed) rc = STD_ERR(HALCOM,FAIL,0);
+
+    /* Read from DB and update */
+    rc = nas_sw_parse_db_and_update(0);
+    if (rc != STD_ERR_OK)
+    {
+        EV_LOGGING(NAS_COM, ERR, "SWITCH"," reading init config from DB failed");
+        return STD_ERR(HALCOM,FAIL,0);
+    }
+
     return rc;
 }
 

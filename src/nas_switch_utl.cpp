@@ -36,6 +36,8 @@
 #include "cps_class_map.h"
 #include "nas_switch.h"
 
+#define MAX_TRY_BEFORE_LOG 5
+
 extern "C" {
 
 /*  @TODO Change API name and revisit the implementation of get max npu API */
@@ -94,11 +96,9 @@ void nas_switch_wait_for_sys_base_mac(hal_mac_addr_t *mac_base) {
         std_usleep(MILLI_TO_MICRO(500));
     }
 }
-
 }
 
-t_std_error nas_get_platform_base_mac_address(hal_mac_addr_t *mac_base) {
-
+static t_std_error nas_fetch_base_mac(hal_mac_addr_t *mac_base) {
 
     if (mac_base == NULL) {
         return(STD_ERR(COM, FAIL, 0));
@@ -127,5 +127,38 @@ t_std_error nas_get_platform_base_mac_address(hal_mac_addr_t *mac_base) {
     void *_base_mac = cps_api_object_attr_data_bin(base_mac_attr);
     memcpy(*mac_base, _base_mac,sizeof(hal_mac_addr_t));
     cps_api_get_request_close(&gp);
+    return(STD_ERR_OK);
+}
+
+/* NAS services use nas_switch_wait_for_sys_base_mac to get base mac address*/
+
+t_std_error nas_get_platform_base_mac_address(hal_mac_addr_t *mac_base) {
+
+    cps_api_key_t key;
+    size_t counter = MAX_TRY_BEFORE_LOG;
+
+    memset (&key, 0, sizeof (key));
+    cps_api_key_from_attr_with_qual(&key,
+                          BASE_PAS_CHASSIS_OBJ, cps_api_qualifier_OBSERVED);
+    while (!cps_api_is_registered(&key, NULL)) {
+        if (counter >= MAX_TRY_BEFORE_LOG) {
+            EV_LOGGING(INTERFACE, ERR ,"NAS-COM-MAC","Platform Service not ready when waiting for base mac");
+            counter = 0;
+        }
+        std_usleep(MILLI_TO_MICRO(1000));
+        counter++;
+    }
+    counter = MAX_TRY_BEFORE_LOG;
+    while (1) {
+        if (nas_fetch_base_mac(mac_base) == STD_ERR_OK)  {
+            break;
+        }
+        if (counter >= MAX_TRY_BEFORE_LOG) {
+            EV_LOGGING(INTERFACE, ERR ,"NAS-COM-MAC","Waiting for base mac address");
+            counter = 0;
+        }
+        std_usleep(MILLI_TO_MICRO(1000));
+        counter++;
+    }
     return(STD_ERR_OK);
 }

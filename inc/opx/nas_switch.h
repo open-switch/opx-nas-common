@@ -115,6 +115,13 @@ void nas_switch_wait_for_sys_base_mac(hal_mac_addr_t *mac_base);
  */
 
 t_std_error nas_get_platform_base_mac_address(hal_mac_addr_t *mac_base);
+
+/**
+ * returns the fc_supported value read from the switch.xml file.
+ * return 1 if fc is supported, else 0.
+ */
+bool nas_switch_get_fc_supported(void);
+
 /**
 * \}
 */

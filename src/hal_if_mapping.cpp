@@ -155,6 +155,7 @@ static std::map<nas_int_type_t, const char *> nas_to_ietf_if_types  =
     {nas_int_type_VLAN, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN},
     {nas_int_type_LAG, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG},
     {nas_int_type_LPBK, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK},
+    {nas_int_type_FC, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL},
 };
 
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t size)
@@ -186,8 +187,11 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
             strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU)) == 0) {
         *if_type =  nas_int_type_CPU;
     } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU)) == 0) {
+            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK)) == 0) {
         *if_type =  nas_int_type_LPBK;
+    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, ietf_type,
+            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL)) == 0) {
+        *if_type =  nas_int_type_FC;
     } else {
         ret = false;
     }

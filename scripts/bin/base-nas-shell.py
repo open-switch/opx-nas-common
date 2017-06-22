@@ -19,7 +19,7 @@ import socket
 import select
 import sys
 import time
-
+import systemd.daemon
 
 def _flush(sock):
     while True:
@@ -83,6 +83,10 @@ def get_cb(methods, params):
     return False
 
 
+def sigterm_hdlr(signum, frame):
+    global shutdown
+    shutdown = True
+
 def trans_cb(methods, params):
     if params['operation'] == 'rpc':
         cmd = params['change']['data'][
@@ -95,6 +99,14 @@ def trans_cb(methods, params):
     return True
 
 if __name__ == '__main__':
+
+    global shutdown
+    shutdown = False
+
+    # Install signal handlers.
+    import signal
+    signal.signal(signal.SIGTERM, sigterm_hdlr)
+
     if len(sys.argv) > 1:
         print run_shell_cmd(sys.argv[1])
         sys.exit(0)
@@ -105,5 +117,16 @@ if __name__ == '__main__':
     d['transaction'] = trans_cb
     key = cps.key_from_name('target', 'base-switch/diag_shell')
     cps.obj_register(handle, key, d)
-    while True:
-        time.sleep(1)
+ 
+    # Notify systemd: Daemon is ready
+    systemd.daemon.notify("READY=1")
+
+    # wait until a signal is received
+    while False == shutdown:
+        signal.pause()
+
+    systemd.daemon.notify("STOPPING=1")
+    # cleanup code here
+
+    # No need to specifically call sys.exit(0).
+    # That's the default behavior in Python.

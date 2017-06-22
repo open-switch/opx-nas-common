@@ -1,14 +1,12 @@
 [Unit]
 Description=OpenSwitch Platform NAS Shell support
-After=opx-nas.service
-DefaultDependencies=no
+After=opx-cps.service
+Wants=opx-cps.service
 
 [Service]
+Type=notify
 EnvironmentFile=/etc/opx/opx-environment
-ExecStart=/usr/bin/base-nas-shell.sh
-
-# Resource Limitations
-LimitNOFILE=16384
+ExecStart=/usr/bin/python -u /usr/bin/base-nas-shell.py
 
 [Install]
 WantedBy=multi-user.target
