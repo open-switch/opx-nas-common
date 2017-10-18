@@ -28,6 +28,7 @@
 #include <string.h>
 #include "std_envvar.h"
 #include "cps_api_object.h"
+#include "cps_api_object_key.h"
 #include "cps_class_map.h"
 #include "cps_api_db_interface.h"
 #include "dell-base-switch-element.h"
@@ -584,6 +585,8 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
     cps_api_key_from_attr_with_qual(cps_api_object_key(obj),
                                 BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY,
                                 cps_api_qualifier_STARTUP_CONFIG);
+    cps_api_set_key_data (obj, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_ID,
+                          cps_api_object_ATTR_T_U32,&sw_id, sizeof(sw_id));
 
     cps_api_db_get(obj, list);
 
@@ -641,6 +644,8 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
         }
     }
 
+    cps_api_object_list_destroy(list, true);
+
     /* if vlaues are not stored in DB update next boot with def values */
     if (profile_found == false)
     {
@@ -670,6 +675,49 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
             sizeof(nas_switch_info.current_profile.name));
     nas_switch_info.current_uftmode = nas_switch_info.next_boot_uftmode;
     nas_switch_info.cur_max_ecmp_per_grp = nas_switch_info.next_boot_max_ecmp_per_grp;
+
+    /* In some cases there will be stale values in DB with RUNNING qualifier,
+       clear them*/
+    cps_api_object_t db_obj = cps_api_object_create();
+
+    if (db_obj == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "SWITCH","DB running clear - failed to create CPS obj");
+        return STD_ERR(HALCOM,FAIL,2);
+    }
+
+    cps_api_key_from_attr_with_qual(cps_api_object_key(db_obj),
+                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY,
+                                cps_api_qualifier_RUNNING_CONFIG);
+    cps_api_object_set_type_operation(cps_api_object_key(db_obj),cps_api_oper_SET);
+
+    /* after updating local, update CPS DB for these objects with RUNNING qualifiers.
+       in some scenarions where startup and running wil be different, if startup.xml gets
+       deleted. So after reading from DB(in both cases if Obj present in DB or not) update
+       current value to DB as RUNNING */
+    cps_api_set_key_data (db_obj, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_ID,
+                          cps_api_object_ATTR_T_U32,&sw_id, sizeof(sw_id));
+    if (nas_sw_profile_supported(sw_id, nas_switch_info.current_profile.name))
+    {
+       cps_api_object_attr_add(db_obj, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_PROFILE,
+                                nas_switch_info.current_profile.name,
+                                sizeof(nas_switch_info.current_profile.name));
+    }
+    cps_api_object_attr_add_u32(db_obj, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_UFT_MODE,
+                                nas_switch_info.current_uftmode);
+    cps_api_object_attr_add_u32(db_obj,
+                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_ECMP_ENTRY_PER_GROUP,
+                                nas_switch_info.cur_max_ecmp_per_grp);
+
+    cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
+    if (ret != cps_api_ret_code_OK)
+    {
+        EV_LOGGING(NAS_L2, ERR, "SWITCH","Failed to clear switch elements from DB");
+        cps_api_object_delete(db_obj);
+        return STD_ERR(HALCOM,FAIL,2);
+    }
+
+    cps_api_object_delete(db_obj);
 
     return STD_ERR_OK;
 }

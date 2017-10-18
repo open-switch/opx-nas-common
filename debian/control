@@ -2,7 +2,7 @@ Source: opx-nas-common
 Section: net
 Priority: optional
 Maintainer: Dell EMC <ops-dev@lists.openswitch.net>
-Build-Depends: debhelper (>= 9),dh-autoreconf,dh-systemd,autotools-dev,libopx-common-dev (>= 1.3.0),libopx-base-model-dev (>= 3.55.0),libopx-cps-dev (>= 3.6.0),libopx-logging-dev (>= 2.0.0)
+Build-Depends: debhelper (>= 9),dh-autoreconf,dh-systemd,autotools-dev,libopx-common-dev (>= 1.3.0),libopx-base-model-dev (>= 3.79.0),libopx-cps-dev,libopx-logging-dev (>= 2.0.0)
 Standards-Version: 3.9.3
 Vcs-Browser: https://github.com/open-switch/opx-nas-common
 Vcs-Git: https://github.com/open-switch/opx-nas-common.git
@@ -14,10 +14,10 @@ Description: This package contains common utilities for the network abstraction 
 
 Package: libopx-nas-common-dev
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},libopx-common-dev (>= 1.3.0),libopx-cps-dev (>= 3.6.0),libopx-logging-dev (>= 2.0.0),libopx-base-model-dev (>= 3.55.0),libopx-nas-common1 (=${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends},libopx-common-dev (>= 1.3.0),libopx-cps-dev,libopx-logging-dev (>= 2.0.0),libopx-base-model-dev (>= 3.79.0),libopx-nas-common1 (=${binary:Version})
 Description: This package contains common utilities for the network abstraction component.
 
 Package: opx-nas-common
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-opx-cps (>= 3.6.0)
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-opx-cps
 Description: This package contains common utilities for the network abstraction component.

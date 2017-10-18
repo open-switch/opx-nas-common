@@ -98,6 +98,8 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
     if (strcmp(name,"switch")==0) {
         const char * id = std_config_attr_get(node,"id");
         const char * npus = std_config_attr_get(node,"npus");
+        const char * hw_info = std_config_attr_get(node,"hw_info");
+        const char * _cpu_port_id = std_config_attr_get(node,"cpu_port_id");
         if (id==NULL || npus==NULL) {
             EV_LOGGING(NAS_COM, ERR, "SWITCH","Invalid switch config. Exiting... fix %s",switch_cfg_path);
             return;
@@ -112,6 +114,11 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         if (switch_cfg[switch_ix].npus==NULL) failed = true;
 
         num_switches += switch_cfg[switch_ix].number_of_npus;
+        memset(switch_cfg[switch_ix].hw_info,0,MAX_HW_INFO_SZ+1);
+        if (hw_info != NULL) {
+            safestrncpy((char *)switch_cfg[switch_ix].hw_info, hw_info, MAX_HW_INFO_SZ);
+        }
+        switch_cfg[switch_ix].cpu_port_id = (_cpu_port_id == NULL) ?  0 : atoi(_cpu_port_id);
 
     }
     if (strncmp(name,"switch_feature", strlen(name))==0) {
@@ -192,3 +199,24 @@ bool nas_find_switch_id_by_npu(uint_t npu_id, nas_switch_id_t * p_switch_id) {
 
     return false;
 }
+
+const char *nas_switch_get_hw_info(nas_switch_id_t switch_id)
+{
+    const nas_switch_detail_t *switch_cfg = nas_switch(switch_id);
+    if (switch_cfg != NULL) {
+        return ((char *)switch_cfg->hw_info);
+    } else {
+        return NULL;
+    }
+}
+
+uint32_t nas_switch_get_cpu_port_id (nas_switch_id_t switch_id)
+{
+    const nas_switch_detail_t *switch_cfg = nas_switch(switch_id);
+    if (switch_cfg != NULL) {
+        return (switch_cfg->cpu_port_id);
+    } else {
+        return 0;
+    }
+}
+

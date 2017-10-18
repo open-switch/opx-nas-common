@@ -31,6 +31,11 @@
 extern "C" {
 #endif
 
+typedef enum {
+    nas_int_phy_port_MAPPED,
+    nas_int_phy_port_UNMAPPED
+} nas_int_port_mapping_t;
+
 /*!
  *  Function to get MAC address for an if_index
  *  \param[in] interface index
@@ -54,6 +59,23 @@ t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table
  *  \return                  std_error
  */
 t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index);
+
+/*!
+ *  Function to check if a given interface is virtual port.
+ *  \param if_idx [in]   Interface index.
+ *  \return              true if virtual port otherwise false.
+ */
+bool nas_is_virtual_port(hal_ifindex_t if_idx);
+
+/*!
+ *  Function to get current physical port mapping status change of logical interface based
+ *  on configuration event published
+ *  \param evt_obj [in]   Event object
+ *  \param mapping_status [out] Current mapping status
+ *  \return               True if there is mapping change
+ */
+bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj,
+                                     nas_int_port_mapping_t *mapping_status);
 
 #ifdef __cplusplus
 }

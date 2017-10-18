@@ -55,9 +55,12 @@ typedef struct {
 /**
  * For each virtual switch the following structure will be created.
  */
+#define MAX_HW_INFO_SZ 256
 typedef struct {
     size_t number_of_npus;
     npu_id_t * npus;
+    char hw_info[MAX_HW_INFO_SZ+1];
+    uint32_t cpu_port_id;
 } nas_switch_detail_t ;
 
 /**
@@ -121,6 +124,23 @@ t_std_error nas_get_platform_base_mac_address(hal_mac_addr_t *mac_base);
  * return 1 if fc is supported, else 0.
  */
 bool nas_switch_get_fc_supported(void);
+
+/**
+ * returns the hw_info of NPU read from the switch.xml file.
+ * @return hw_info contains NPU's Identification and/or its capabilities in the string format.
+ * @param   Switch Id
+ *
+ *
+ */
+const char *nas_switch_get_hw_info(nas_switch_id_t);
+
+/**
+ * returns the CPU Port Id of NPU read from the switch.xml file.
+ * if cpu_port_id is not present in the config file then it return 0.
+ * @param   Switch Id
+ * @return Cpu Port Id
+ */
+uint32_t nas_switch_get_cpu_port_id(nas_switch_id_t);
 
 /**
 * \}

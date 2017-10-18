@@ -22,15 +22,18 @@
 
 
 #include "nas_if_utils.h"
+#include "hal_if_mapping.h"
 
 #include "dell-base-if-lag.h"
 #include "dell-base-if.h"
 #include "dell-interface.h"
 #include "iana-if-type.h"
+#include "hal_if_mapping.h"
 
 #include "std_error_codes.h"
 #include "ds_common_types.h"
 #include "std_mac_utils.h"
+#include "std_utils.h"
 
 #include "cps_api_object_key.h"
 
@@ -39,7 +42,7 @@
 
 #include "event_log.h"
 
-extern "C" t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_addr_t mac_addr)
+t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_addr_t mac_addr)
 {
     if(mac_addr == NULL) {
         EV_LOGGING (INTERFACE, ERR, "INTF-C","mac_addr_ptr NULL");
@@ -83,7 +86,6 @@ extern "C" t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_
     return rc;
 }
 
-extern "C"
 t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table_handle_t ndi_id_data)
 {
     if(ndi_id_data == NULL) {
@@ -131,7 +133,6 @@ t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table
     return rc;
 }
 
-extern "C"
 t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index)
 {
     cps_api_get_params_t gp;
@@ -165,3 +166,101 @@ t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index
     return STD_ERR(INTERFACE,FAIL,0);
 }
 
+bool nas_is_virtual_port(hal_ifindex_t if_idx)
+{
+    interface_ctrl_t _port;
+    memset(&_port, 0, sizeof(_port));
+
+    _port.if_index = if_idx;
+    _port.q_type = HAL_INTF_INFO_FROM_IF;
+
+    if (dn_hal_get_interface_info(&_port) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, ERR,"INTF-C","Failed to get if_info");
+        return false;
+    }
+
+    if((_port.int_type == nas_int_type_PORT) &&
+       (_port.npu_id == 0 && _port.port_id == 0))
+        return true;
+
+    return false;
+}
+
+bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj, nas_int_port_mapping_t *mapping_status)
+{
+    cps_api_key_t match_key;
+    cps_api_key_from_attr_with_qual(&match_key,
+                                    DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_OBJ,
+                                    cps_api_qualifier_OBSERVED);
+    cps_api_key_t *evt_key = cps_api_object_key(evt_obj);
+    if (cps_api_key_matches(&match_key, evt_key, true) != 0) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C", "Not interface config event");
+        return false;
+    }
+    cps_api_operation_types_t op = cps_api_object_type_operation(evt_key);
+    if (op != cps_api_oper_SET) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C", "Not interface config set event");
+        return false;
+    }
+    cps_api_object_attr_t npu_attr =
+        cps_api_object_attr_get(evt_obj, BASE_IF_PHY_IF_INTERFACES_INTERFACE_NPU_ID);
+    cps_api_object_attr_t port_attr =
+        cps_api_object_attr_get(evt_obj, BASE_IF_PHY_IF_INTERFACES_INTERFACE_PORT_ID);
+    if (npu_attr == NULL || port_attr == NULL) {
+        return false;
+    }
+    npu_id_t npu = cps_api_object_attr_data_u32(npu_attr);
+    npu_port_t port = cps_api_object_attr_data_u32(port_attr);
+    if (npu == 0 && port == 0) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C", "Invalid npu and port id in event");
+        return false;
+    }
+
+    interface_ctrl_t port_info;
+    memset(&port_info, 0, sizeof(port_info));
+    cps_api_object_attr_t if_attr = cps_api_get_key_data(evt_obj, IF_INTERFACES_INTERFACE_NAME);
+    if (if_attr != NULL) {
+        safestrncpy(port_info.if_name, (const char *)cps_api_object_attr_data_bin(if_attr),
+                    sizeof(port_info.if_name));
+        port_info.q_type = HAL_INTF_INFO_FROM_IF_NAME;
+    } else {
+        if_attr = cps_api_object_attr_get(evt_obj, DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_IF_INDEX);
+        if (if_attr == NULL) {
+            EV_LOGGING(INTERFACE, ERR, "INTF-C", "Could not found if name or ifindex attr in event");
+            return false;
+        }
+        port_info.if_index = cps_api_object_attr_data_u32(if_attr);
+        port_info.q_type = HAL_INTF_INFO_FROM_IF;
+    }
+    if (dn_hal_get_interface_info(&port_info) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C", "Failed to get registered interface info");
+        return false;
+    }
+
+    if (port_info.npu_id == 0 && port_info.port_id == 0) {
+        /* NPU port 0 means the registered interface was disassociated and became virtual */
+        if (mapping_status) {
+            *mapping_status = nas_int_phy_port_UNMAPPED;
+        }
+        return true;
+    }
+
+    if (port_info.npu_id != npu || port_info.port_id != port) {
+        EV_LOGGING(INTERFACE, INFO, "INTF-C", "NPU port %d-%d is not the same as current config %d-%d",
+                   npu, port, port_info.npu_id, port_info.port_id);
+        /* This might happen when interface was moved from one physical port to another in very short time.
+           We should treat this case as disassociate to let caller do cleanup on origin port, and there should
+           be following event to indicate interface associated again. */
+        if (mapping_status) {
+            *mapping_status = nas_int_phy_port_UNMAPPED;
+        }
+        return true;
+    }
+
+    /* NPU port is not 0 and is equal to those of registered interface, that means interface was
+       associated with physical port */
+    if (mapping_status) {
+        *mapping_status = nas_int_phy_port_MAPPED;
+    }
+    return true;
+}
