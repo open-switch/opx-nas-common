@@ -1,3 +1,13 @@
+opx-nas-common (6.1.0) unstable; urgency=medium
+  
+  * Update: Add API to fetch MAC address
+  * Update: Add MGMT type
+  * Update: Add macvlan type
+  * Update: Add a function to reset ndi creation flag for virtual port unassociation
+  * Update: Add flag on interface_ctrl_t to indicate if interface is virtual
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Mon, 11 Dec 2017 13:20:39 -0800
+
 opx-nas-common (4.3.0) unstable; urgency=medium
 
   [ Atanu Mandal]

@@ -28,6 +28,8 @@ extern "C" {
 #define NAS_CMN_MAX_ECMP_ENTRIES_PER_GRP_MAX 1024
 #define NAS_CMN_MAX_ECMP_ENTRIES_PER_GRP_MIN 2
 
+#define NAS_CMN_DEFAULT_SWITCH_ID 0
+
 /**
  * switch profile API's can be used by
  * -CPS get/set from nas-l2 and

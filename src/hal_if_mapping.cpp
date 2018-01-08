@@ -53,6 +53,8 @@ static const intf_info_t _has_key_t[] = {
         HAL_INTF_INFO_FROM_PORT,
         HAL_INTF_INFO_FROM_IF,
         HAL_INTF_INFO_FROM_TAP,
+        HAL_INTF_INFO_FROM_VLAN,
+        HAL_INTF_INFO_FROM_LAG,
 };
 
 static const size_t _has_key_t_len = sizeof(_has_key_t)/sizeof(*_has_key_t);
@@ -61,27 +63,64 @@ static const intf_info_t _all_queries_t[] = {
         HAL_INTF_INFO_FROM_PORT,
         HAL_INTF_INFO_FROM_IF,
         HAL_INTF_INFO_FROM_TAP,
-        HAL_INTF_INFO_FROM_IF_NAME
+        HAL_INTF_INFO_FROM_IF_NAME,
+        HAL_INTF_INFO_FROM_VLAN,
+        HAL_INTF_INFO_FROM_LAG
 
 };
 static const size_t _all_queries_t_len = sizeof(_all_queries_t)/sizeof(*_all_queries_t);
 
 
 static void print_record(interface_ctrl_t*p) {
-    printf("Name:%s, NPU:%d, Port:%d, SubPortEnabled:%d, SubPort:%d, "
-            "TapID:%d, VRF:%d, IFIndex:%d\n",
-            p->if_name,p->npu_id, p->port_id,p->sub_port,
-            p->sub_interface,p->tap_id,p->vrf_id,p->if_index);
+    printf("Name:%s, NPU:%d, Port:%d, SubPort:%d, "
+            "TapID:%d, VRF:%d, IFIndex:%d MAC %s\n",
+            p->if_name,p->npu_id, p->port_id,
+            p->sub_interface,p->tap_id,p->vrf_id,p->if_index, p->mac_addr);
+
+
 }
 
 inline _key_t _mk_key(uint32_t lhs, uint32_t rhs) {
     return  ((_key_t)(lhs))<<32 | rhs;
 }
 
+static inline bool _query_valid(intf_info_t q_type, nas_int_type_t if_type)
+{
+    switch(q_type) {
+    case HAL_INTF_INFO_FROM_IF:
+    case HAL_INTF_INFO_FROM_IF_NAME:
+        // ifindex and name query for all interfaces
+        return true;
+    case HAL_INTF_INFO_FROM_PORT:
+    case HAL_INTF_INFO_FROM_TAP:
+        if (if_type == nas_int_type_PORT || if_type == nas_int_type_CPU ||
+            if_type == nas_int_type_FC) {
+            return true;
+        }
+        break;
+    case HAL_INTF_INFO_FROM_VLAN:
+        if (if_type == nas_int_type_VLAN) {
+            return true;
+        }
+        break;
+    case HAL_INTF_INFO_FROM_LAG:
+        if (if_type == nas_int_type_LAG) {
+            return true;
+        }
+        break;
+    }
+
+    return false;
+}
+
 static _key_t _mk_key(intf_info_t type,interface_ctrl_t *rec) {
     switch(type) {
     case HAL_INTF_INFO_FROM_PORT:
-        return _mk_key(rec->npu_id,rec->port_id);
+        return _mk_key(rec->npu_id, rec->port_id);
+    case HAL_INTF_INFO_FROM_LAG:
+        return rec->lag_id;
+    case HAL_INTF_INFO_FROM_VLAN:
+        return rec->vlan_id;
     case HAL_INTF_INFO_FROM_IF:
         return _mk_key(rec->vrf_id,rec->if_index);
     case HAL_INTF_INFO_FROM_TAP:
@@ -96,6 +135,9 @@ static _key_t _mk_key(intf_info_t type,interface_ctrl_t *rec) {
  * Search for the record - fill it in based on the search parameters and return it
  */
 static interface_ctrl_t *_locate(intf_info_t type, interface_ctrl_t *rec) {
+    if (!_query_valid(type, rec->int_type)) {
+        return NULL;
+    }
     if (type == HAL_INTF_INFO_FROM_IF_NAME) {
         if (if_name_map.find(rec->if_name)==if_name_map.end()) return NULL;
         return if_name_map.at(rec->if_name);
@@ -108,6 +150,9 @@ static interface_ctrl_t *_locate(intf_info_t type, interface_ctrl_t *rec) {
 }
 
 static bool _add(intf_info_t type, interface_ctrl_t *rec) {
+    if (!_query_valid(type, rec->int_type)) {
+        return false;
+    }
     if (type == HAL_INTF_INFO_FROM_IF_NAME) {
         if (strlen(rec->if_name)==0) return false;
         if_name_map[rec->if_name] = rec;
@@ -135,6 +180,9 @@ static void _cleanup(interface_ctrl_t *rec) {
 
     ix = 0;
     for ( ; ix < _has_key_t_len ; ++ix ) {
+        if (!_query_valid(_has_key_t[ix], rec->int_type)) {
+            continue;
+        }
         _key_t k = _mk_key(_has_key_t[ix],rec);
         if(k==0) continue;
         if_mappings[_has_key_t[ix]].erase(k);
@@ -156,6 +204,8 @@ static std::map<nas_int_type_t, const char *> nas_to_ietf_if_types  =
     {nas_int_type_LAG, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG},
     {nas_int_type_LPBK, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK},
     {nas_int_type_FC, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL},
+    {nas_int_type_MACVLAN, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN},
+    {nas_int_type_MGMT, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT},
 };
 
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t size)
@@ -192,6 +242,12 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
     } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, ietf_type,
             strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL)) == 0) {
         *if_type =  nas_int_type_FC;
+    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN, ietf_type,
+            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN)) == 0) {
+        *if_type =  nas_int_type_MACVLAN;
+    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, ietf_type,
+            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT)) == 0) {
+        *if_type =  nas_int_type_MGMT;
     } else {
         ret = false;
     }
@@ -247,14 +303,42 @@ t_std_error dn_hal_get_interface_info(interface_ctrl_t *p) {
     *p = *_p;
     return STD_ERR_OK;
 }
+/*  Update only non- Key attributes like MAC address */
+static t_std_error dn_hal_update_interface(interface_ctrl_t *p) {
+    STD_ASSERT(p!=NULL);
+    std_mutex_simple_lock_guard l(&db_locks);
+    interface_ctrl_t *_p = _locate(p->q_type,p);
+    if (_p==nullptr) {
+        return STD_ERR(INTERFACE,PARAM,0);
+    }
 
-static void dump_tree(if_map_t &map) {
-    auto it = map.begin();
-    auto end = map.end();
+    /* only MAC can be updated in the DB. DEREG and REG should be done for other items. */
+    safestrncpy(_p->mac_addr, (const char *)p->mac_addr, sizeof(_p->mac_addr));
+    return STD_ERR_OK;
+}
 
-    for ( ; it !=end ; ++it ) {
-        printf("idx %llu ",(unsigned long long)it->first);
-        print_record(it->second);
+/* Update MAC address in string Format "11:11:11:11:11:11" */
+t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac) {
+
+    interface_ctrl_t _intf;
+    memset(&_intf, 0, sizeof(_intf));
+    _intf.if_index = ifx;
+    _intf.q_type = HAL_INTF_INFO_FROM_IF;
+    safestrncpy(_intf.mac_addr, mac, sizeof(_intf.mac_addr));
+
+    EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for MAC intf  %s MAC %s", _intf.if_name, mac);
+    return(dn_hal_update_interface(&_intf));
+}
+
+static void dump_tree(intf_info_t q_type) {
+    auto it = if_mappings.find(q_type);
+    if (it == if_mappings.end()) {
+        return;
+    }
+    auto& map = it->second;
+    for (auto map_it: map) {
+        printf("idx %llu ",(unsigned long long)map_it.first);
+        print_record(map_it.second);
     }
 
 }
@@ -272,16 +356,23 @@ static void dump_tree_ifname(if_name_map_t &map) {
 void dn_hal_dump_interface_mapping(void) {
     std_mutex_simple_lock_guard l(&db_locks);
     printf("Dumping NPU/Port mapping...\n");
-    dump_tree(if_mappings[HAL_INTF_INFO_FROM_PORT]);
+    dump_tree(HAL_INTF_INFO_FROM_PORT);
 
     printf("Dumping NPU/Port ifname mapping...\n");
     dump_tree_ifname(if_name_map);
 
     printf("Dumping interface index mapping...\n");
-    dump_tree(if_mappings[HAL_INTF_INFO_FROM_IF]);
+    dump_tree(HAL_INTF_INFO_FROM_IF);
 
     printf("Dumping tap index mapping...\n");
-    dump_tree(if_mappings[HAL_INTF_INFO_FROM_TAP]);
+    dump_tree(HAL_INTF_INFO_FROM_TAP);
+
+    printf("Dumping VLAN ID mapping...\n");
+    dump_tree(HAL_INTF_INFO_FROM_VLAN);
+
+    printf("Dumping LAG ID mapping...\n");
+    dump_tree(HAL_INTF_INFO_FROM_LAG);
+
 }
 
 }

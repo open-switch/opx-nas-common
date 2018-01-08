@@ -29,6 +29,7 @@
 #include "std_error_codes.h"
 #include "ds_common_types.h"
 #include "dell-base-interface-common.h"
+#include "nas_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +50,7 @@ typedef enum  {
     nas_int_type_LPBK=4,
     nas_int_type_FC=5,
     nas_int_type_MGMT=6, /* Management interface type */
+    nas_int_type_MACVLAN=7,
 }nas_int_type_t;
 
 /*!
@@ -67,6 +69,12 @@ typedef enum intf_info_e{
     /* intf info from if name */
     HAL_INTF_INFO_FROM_IF_NAME,
 
+    /* intf info from VLAN ID */
+    HAL_INTF_INFO_FROM_VLAN,
+
+    /* intf info from LAG ID */
+    HAL_INTF_INFO_FROM_LAG,
+
 } intf_info_t;
 
 typedef enum {
@@ -78,6 +86,7 @@ typedef enum {
 /*!
  * Interface control structure for if_index <-> npu port mapping
  */
+#define MAC_STR_SZ 18
 typedef struct _interface_ctrl_s{
     intf_info_t q_type;    //! type of the query being done or 0
 
@@ -93,13 +102,23 @@ typedef struct _interface_ctrl_s{
 
     //the following fields are optional based on what is being mapped
     npu_id_t npu_id;    //! the npu id
-    npu_port_t port_id;    //! the port id
     int tap_id;            //!virtual interface id
-    bool sub_port;        //! if port is split into smaller ports
     port_t sub_interface;    //! the sub interface for the port if necessary
     char if_name[HAL_IF_NAME_SZ];    //! the name of the interface
-    hal_vlan_id_t vlan_id;         //!the vlan id
-    nas_lag_id_t lag_id;         //!the lag id
+
+    union {
+        struct {
+            bool port_mapped;               //! indicate if interface mapped to physical port
+            npu_port_t port_id;             //! the port id (valid only if port_mapped is true)
+        };
+        struct {
+            hal_vlan_id_t vlan_id;          //!the vlan id
+        };
+        struct {
+            lag_id_t lag_id;                //!the lag object id
+        };
+    };
+    char mac_addr[MAC_STR_SZ];  //MAC address in string format "ab:cd:ef:00:11:22"
 
 }interface_ctrl_t;
 
@@ -123,6 +142,13 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type);
  */
 t_std_error dn_hal_get_interface_info(interface_ctrl_t *p_intf_ctrl);
 
+/*!
+ *  Update MAC address in the interface control block
+ *  \param[in] interface index
+ *  \param[in] mac address associated with the interface in string format
+ *  \return     std_error
+ */
+t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac);
 /**
  * Debug print of the entire interface mapping table
  */

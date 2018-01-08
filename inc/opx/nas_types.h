@@ -47,6 +47,8 @@ typedef cps_api_attr_id_t nas_attr_id_t;
 
 typedef uint64_t  ndi_obj_id_t;
 
+typedef nas_obj_id_t lag_id_t;
+
 /** NAS CPS handler common Error codes */
 #define    NAS_BASE_E_NONE           (int)STD_ERR_OK
 #define    NAS_BASE_E_MEM            (int)STD_ERR (HALCOM, NOMEM, 0)

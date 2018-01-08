@@ -31,6 +31,7 @@
 #include "cps_api_object_key.h"
 #include "cps_class_map.h"
 #include "cps_api_db_interface.h"
+#include "cps_api_object_tools.h"
 #include "dell-base-switch-element.h"
 #include "nas_sw_profile_api.h"
 #include "nas_sw_profile.h"
@@ -190,6 +191,37 @@ t_std_error nas_switch_update_ecmp_info (std_config_node_t node)
     -CPS get/set from nas-l2 and
     -from nas-ndi to read init parametrs
 */
+
+/* nas_sw_profile_startup_cps_db_get - will get the object
+   stored in the CPS DB with startup qualifier */
+cps_api_object_list_t nas_sw_profile_startup_cps_db_get()
+{
+    cps_api_object_list_t obj_list = cps_api_object_list_create();
+    cps_api_object_guard og(cps_api_obj_tool_create(cps_api_qualifier_STARTUP_CONFIG,
+        BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY,false));
+
+    if(obj_list==nullptr || og.get()==nullptr)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH", "Creating list or object failed");
+        if(obj_list != nullptr)
+        {
+            cps_api_object_list_destroy(obj_list, true);
+        }
+        return nullptr;
+    }
+
+    cps_api_object_attr_add_u32(og.get(),
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_ID,
+                NAS_CMN_DEFAULT_SWITCH_ID);
+    if(cps_api_db_get(og.get(),obj_list)==cps_api_ret_code_OK)
+    {
+        return obj_list;
+    }
+    EV_LOGGING(NAS_COM, INFO , "NAS-CMN-SWITCH", "No data in startup DB");
+    cps_api_object_list_destroy(obj_list, true);
+    return nullptr;
+}
+
 /* nas_sw_profile_current_profile_get - will get the currently
    active switch profile */
 t_std_error nas_sw_profile_current_profile_get(uint32_t sw_id,
@@ -245,8 +277,32 @@ t_std_error nas_sw_profile_conf_profile_get(uint32_t sw_id, char *conf_profile,
         EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","profiles not configured - conf get");
         return STD_ERR(HALCOM,PARAM,2);
     }
-    safestrncpy(conf_profile, nas_switch_info.next_boot_profile.name,len);
 
+    /* If no object in DB or corrupted data, return default */
+    safestrncpy(conf_profile, nas_switch_info.def_profile.name, len);
+
+    cps_api_object_list_guard obj_list(nas_sw_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","No object in startup DB");
+    }
+    else
+    {
+        //Currently handled for only one switch id, get the first object
+        cps_api_object_t obj = cps_api_object_list_get(list,0);
+        if(obj != nullptr)
+        {
+            char *next_boot_profile =
+                (char *)cps_api_object_get_data(obj,
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_PROFILE);
+            if(next_boot_profile != NULL)
+            {
+                safestrncpy(conf_profile, next_boot_profile,
+                        strlen(conf_profile)+1);
+            }
+        }
+    }
     return STD_ERR_OK;
 }
 
@@ -295,7 +351,7 @@ bool nas_sw_profile_supported(uint32_t sw_id, char *conf_profile)
                 conf_profile);
     return false;
 }
-/* set the swithc profile, which can be used on next reboot, if user saves the
+/* set the switch profile, which can be used on next reboot, if user saves the
    config */
 t_std_error nas_sw_profile_conf_profile_set(uint32_t sw_id, char *conf_profile,
                                             cps_api_operation_types_t op_type)
@@ -398,7 +454,30 @@ t_std_error nas_sw_profile_conf_uft_get(uint32_t *conf_uft)
         EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","UFT modes not configured - conf get");
         return STD_ERR(HALCOM,PARAM,2);
     }
-    *conf_uft = nas_switch_info.next_boot_uftmode;
+
+    /* If no object in DB or corrupted data, return default */
+    *conf_uft = nas_switch_info.def_uftmode;
+
+    cps_api_object_list_guard obj_list(nas_sw_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","No object in startup DB");
+    }
+    else
+    {
+        //Currently handled for only one switch id, get the first object
+        cps_api_object_t obj = cps_api_object_list_get(list,0);
+        if(obj != nullptr)
+        {
+            uint32_t *next_boot_uft =
+                (uint32_t *)cps_api_object_get_data(obj,
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_UFT_MODE);
+            if(next_boot_uft != NULL)
+                *conf_uft = *next_boot_uft;
+
+        }
+    }
     return STD_ERR_OK;
 }
 /* nas_sw_profile_conf_uft_set - configures the UFT mode,
@@ -538,7 +617,30 @@ t_std_error nas_sw_profile_conf_max_ecmp_per_grp_get(uint32_t *conf_max_ecmp_per
         EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
         return STD_ERR(HALCOM,PARAM,2);
     }
-    *conf_max_ecmp_per_grp = nas_switch_info.next_boot_max_ecmp_per_grp;
+
+    /* If no object in DB or corrupted data, return default */
+    *conf_max_ecmp_per_grp = nas_switch_info.def_max_ecmp_per_grp;
+
+    cps_api_object_list_guard obj_list(nas_sw_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","No object in startup DB");
+    }
+    else
+    {
+        //Currently handled for only one switch id, get the first object
+        cps_api_object_t obj = cps_api_object_list_get(list,0);
+        if(obj != nullptr)
+        {
+            uint32_t *next_boot_max_ecmp_per_grp =
+                (uint32_t *)cps_api_object_get_data(obj,
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_ECMP_ENTRY_PER_GROUP);
+            if(next_boot_max_ecmp_per_grp != NULL)
+                *conf_max_ecmp_per_grp = *next_boot_max_ecmp_per_grp;
+
+        }
+    }
     return STD_ERR_OK;
 }
 /* nas_sw_profile_conf_ecmp_set - configures max_ecmp_per_grp mode,
@@ -573,27 +675,14 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 
     profile_found = uft_found = ecmp_found = false;
 
-    cps_api_object_t obj = cps_api_object_create();
-    cps_api_object_list_t list = cps_api_object_list_create();
+    cps_api_object_list_t list = nas_sw_profile_startup_cps_db_get();
 
-    if ((obj == NULL) || (list == NULL))
-    {
-        EV_LOGGING(NAS_COM, NOTICE, "SWITCH","DB read sw profile - failed to create CPS obj/list");
-        return STD_ERR(HALCOM,FAIL,2);
-    }
-
-    cps_api_key_from_attr_with_qual(cps_api_object_key(obj),
-                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY,
-                                cps_api_qualifier_STARTUP_CONFIG);
-    cps_api_set_key_data (obj, BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_ID,
-                          cps_api_object_ATTR_T_U32,&sw_id, sizeof(sw_id));
-
-    cps_api_db_get(obj, list);
-
-    cps_api_object_delete(obj);
-
-    size_t len = cps_api_object_list_size(list);
+    size_t len = 0;
     size_t ix = 0;
+
+    if (list != nullptr) {
+        len = cps_api_object_list_size(list);
+    }
 
     memset(nas_switch_info.current_profile.name, 0,
             sizeof(nas_switch_info.current_profile.name));
@@ -644,7 +733,9 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
         }
     }
 
-    cps_api_object_list_destroy(list, true);
+    if (list != nullptr) {
+        cps_api_object_list_destroy(list, true);
+    }
 
     /* if vlaues are not stored in DB update next boot with def values */
     if (profile_found == false)

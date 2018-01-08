@@ -36,6 +36,14 @@ typedef enum {
     nas_int_phy_port_UNMAPPED
 } nas_int_port_mapping_t;
 
+
+/*!
+ *  Function to get MAC address for an if_index
+ *  \param[in] interface name
+ *  \param[out] mac address associated with the interface in string format
+ *  \return     std_error
+ */
+t_std_error dn_hal_get_intf_mac_addr_str(const char *name, char *mac);
 /*!
  *  Function to get MAC address for an if_index
  *  \param[in] interface index
@@ -51,6 +59,14 @@ t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_addr_t mac_
  *  \return                  std_error
  */
 t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table_handle_t ndi_id_data);
+
+/*!
+ *  Function to get the LAG id given the ifindex.
+ *  \param if_index [in] Lag interface index.
+ *  \param lag_id [out]  Lag Id.
+ *  \return              std_error
+ */
+t_std_error nas_get_lag_id_from_if_index (hal_ifindex_t if_index, lag_id_t *lag_id);
 
 /*!
  *  Function to get the LAG ifindex given the NDI lag id.

@@ -130,6 +130,7 @@ class base_obj_t
         void      mark_attr_dirty (nas_attr_id_t attr_id);
 
         void      mark_ndi_created () {_ndi_created = true;}
+        void      mark_ndi_removed () {_ndi_created = false;}
 
         ///////     Virtual functions to change NPU set     ////////
         /*! Add NPU to the set of NPUs, object needs to be pushed to
