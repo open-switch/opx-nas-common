@@ -70,11 +70,11 @@ t_std_error nas_get_lag_id_from_if_index (hal_ifindex_t if_index, lag_id_t *lag_
 
 /*!
  *  Function to get the LAG ifindex given the NDI lag id.
- *  \param ndi_port [in]   NDI Lag id.
+ *  \param ndi_lag_id [in]   NDI Lag id.
  *  \param lag_if_index [out] Lag If index.
  *  \return                  std_error
  */
-t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index);
+t_std_error nas_get_lag_if_index (nas_obj_id_t ndi_lag_id, hal_ifindex_t *lag_if_index);
 
 /*!
  *  Function to check if a given interface is virtual port.

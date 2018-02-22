@@ -41,6 +41,7 @@
 #include "cps_class_map.h"
 
 #include "event_log.h"
+#include <inttypes.h>
 
 /*  Get MAC Address ( string format) from interface control block */
 t_std_error dn_hal_get_intf_mac_addr_str(const char *name, char *mac) {
@@ -159,37 +160,30 @@ t_std_error nas_get_lag_id_from_if_index (hal_ifindex_t if_index, lag_id_t *lag_
     return rc;
 }
 
-t_std_error nas_get_lag_if_index (uint64_t ndi_port, hal_ifindex_t *lag_if_index)
+t_std_error nas_get_lag_if_index (nas_obj_id_t ndi_lag_id, hal_ifindex_t *lag_if_index)
 {
-    cps_api_get_params_t gp;
-    cps_api_get_request_init(&gp);
-    cps_api_get_request_guard rg(&gp);
+    interface_ctrl_t intf_ctrl;
+    t_std_error rc = STD_ERR_OK;
 
-    EV_LOGGING (INTERFACE, DEBUG, "INTF-C", "querying for ifindex of ndi lag id 0x%x ", ndi_port);
-    cps_api_object_t obj = cps_api_object_list_create_obj_and_append(gp.filters);
+    memset(&intf_ctrl, 0, sizeof(interface_ctrl_t));
 
-    cps_api_key_from_attr_with_qual(cps_api_object_key(obj), DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_OBJ,
-            cps_api_qualifier_TARGET);
+    intf_ctrl.q_type = HAL_INTF_INFO_FROM_LAG;
+    intf_ctrl.lag_id = static_cast<lag_id_t>(ndi_lag_id);
+    intf_ctrl.int_type = nas_int_type_LAG;
 
-    cps_api_object_attr_add_u64(obj,BASE_IF_LAG_IF_INTERFACES_INTERFACE_LAG_OPAQUE_DATA, ndi_port);
-    cps_api_object_attr_add(obj,IF_INTERFACES_INTERFACE_TYPE,
-                  (const char *)IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG,
-                  sizeof(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG));
-
-    if (cps_api_get(&gp)==cps_api_ret_code_OK) {
-        size_t mx = cps_api_object_list_size(gp.list);
-        for (size_t ix = 0 ; ix < mx ; ++ix ) {
-            cps_api_object_t obj = cps_api_object_list_get(gp.list,ix);
-            cps_api_object_it_t it;
-            cps_api_object_it_begin(obj,&it);
-            cps_api_object_attr_t attr = cps_api_object_it_find(&it, DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_IF_INDEX);
-            if (attr) {
-                *lag_if_index = cps_api_object_attr_data_u32(attr);
-                 return STD_ERR_OK;
-            }
-        }
+    if((rc=dn_hal_get_interface_info(&intf_ctrl)) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C","Failed to find ifindex for lag id %" PRId64 " rc=%d",
+                intf_ctrl.lag_id, rc);
+        return rc;
     }
-    return STD_ERR(INTERFACE,FAIL,0);
+
+    if (intf_ctrl.int_type != nas_int_type_LAG) {
+        EV_LOGGING(INTERFACE, ERR, "INTF-C","Invalid Interface type %d for lag id %" PRId64,
+                        intf_ctrl.int_type, intf_ctrl.lag_id);
+                return STD_ERR(INTERFACE,PARAM,0);
+    }
+    *lag_if_index = intf_ctrl.if_index;
+    return rc;
 }
 
 bool nas_is_virtual_port(hal_ifindex_t if_idx)
