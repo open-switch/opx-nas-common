@@ -37,6 +37,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <cstring>
 
 using _key_t = uint64_t;
 using if_map_t = std::unordered_map<uint64_t,interface_ctrl_t *>;
@@ -190,6 +191,9 @@ static void _cleanup(interface_ctrl_t *rec) {
     if (strlen(rec->if_name)>0) {
         if_name_map.erase(rec->if_name);
     }
+    if (rec->desc) {
+        delete [] rec->desc;
+    }
     if_records.erase(rec);
     delete rec;
 }
@@ -328,6 +332,44 @@ t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac) {
 
     EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for MAC intf  %s MAC %s", _intf.if_name, mac);
     return(dn_hal_update_interface(&_intf));
+}
+
+t_std_error dn_hal_update_intf_desc(hal_ifindex_t ifx, const char *desc) {
+
+    STD_ASSERT(desc!=NULL);
+    if (strlen(desc) > MAX_INTF_DESC_LEN) {
+        return STD_ERR(INTERFACE, PARAM, 0);
+    }
+
+    interface_ctrl_t _intf;
+    size_t desc_len = strlen(desc);
+
+    memset(&_intf, 0, sizeof(_intf));
+    _intf.if_index = ifx;
+    _intf.q_type = HAL_INTF_INFO_FROM_IF;
+
+    std_mutex_simple_lock_guard l(&db_locks);
+    interface_ctrl_t *_p = _locate(_intf.q_type, &_intf);
+    if (_p == nullptr) {
+        return STD_ERR(INTERFACE, PARAM, 0);
+    }
+ 
+    if (_p->desc != nullptr) {
+        delete[] _p->desc;
+    }
+
+    /** We check the length of description and ensure the first character
+    is alphanumeric because CPS uses '/036' for a blank string
+    instead of '/0' **/
+    if (desc_len == 0 || !isalnum(desc[0])) {
+        _p->desc = nullptr;
+    } else {
+        _p->desc = new char[desc_len];
+        safestrncpy(_p->desc, desc, desc_len + 1);
+    }
+
+    EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for description intf %s desc: %s", _intf.if_name, desc);
+    return STD_ERR_OK;
 }
 
 static void dump_tree(intf_info_t q_type) {

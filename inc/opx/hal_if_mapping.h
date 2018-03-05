@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#define MAX_INTF_DESC_LEN 256 //Max length for intf description
+
 /**
  * @defgroup NDIBaseIntfCommon NDI Common - Interface Mapping
  * Functions to retrieve and manage port - interface mapping
@@ -119,6 +121,7 @@ typedef struct _interface_ctrl_s{
         };
     };
     char mac_addr[MAC_STR_SZ];  //MAC address in string format "ab:cd:ef:00:11:22"
+    char *desc;     //Pointer to interface description
 
 }interface_ctrl_t;
 
@@ -149,6 +152,15 @@ t_std_error dn_hal_get_interface_info(interface_ctrl_t *p_intf_ctrl);
  *  \return     std_error
  */
 t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac);
+
+/*!
+ *  Update description in the interface control block
+ *  \param[in] interface index
+ *  \param[in] description of interface in string format
+ *  \return     std_error
+ */
+t_std_error dn_hal_update_intf_desc(hal_ifindex_t ifx, const char *desc);
+
 /**
  * Debug print of the entire interface mapping table
  */
