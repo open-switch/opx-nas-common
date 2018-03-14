@@ -50,6 +50,8 @@ static std::unordered_map<intf_info_t,if_map_t,std::hash<int32_t>> if_mappings;
 
 static if_name_map_t if_name_map;
 
+static std::set<hal_ifindex_t> if_indexes;
+
 static const intf_info_t _has_key_t[] = {
         HAL_INTF_INFO_FROM_PORT,
         HAL_INTF_INFO_FROM_IF,
@@ -162,6 +164,7 @@ static bool _add(intf_info_t type, interface_ctrl_t *rec) {
         if (k==0) return false;
         if_mappings[type][k] = rec;
     }
+    if_indexes.insert(rec->if_index);
     return true;
 }
 
@@ -195,6 +198,7 @@ static void _cleanup(interface_ctrl_t *rec) {
         delete [] rec->desc;
     }
     if_records.erase(rec);
+    if_indexes.erase(rec->if_index);
     delete rec;
 }
 
@@ -307,6 +311,26 @@ t_std_error dn_hal_get_interface_info(interface_ctrl_t *p) {
     *p = *_p;
     return STD_ERR_OK;
 }
+
+t_std_error dn_hal_get_next_ifindex(hal_ifindex_t *ifindex, hal_ifindex_t *next_ifindex) {
+    if (ifindex == nullptr) {
+        std::set<hal_ifindex_t>::iterator it = if_indexes.begin();
+        *next_ifindex = *it;
+        return STD_ERR_OK;
+    }
+
+    auto it = if_indexes.find(*ifindex);
+    if( it != if_indexes.end()) {
+        it++;
+        if (it != if_indexes.end())
+        	*next_ifindex = *it;
+        else return STD_ERR(INTERFACE,PARAM,0);
+    }
+    else return STD_ERR(INTERFACE,PARAM,0);
+
+    return STD_ERR_OK;
+}
+
 /*  Update only non- Key attributes like MAC address */
 static t_std_error dn_hal_update_interface(interface_ctrl_t *p) {
     STD_ASSERT(p!=NULL);

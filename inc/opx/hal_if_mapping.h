@@ -166,6 +166,15 @@ t_std_error dn_hal_update_intf_desc(hal_ifindex_t ifx, const char *desc);
  */
 void dn_hal_dump_interface_mapping(void);
 
+/*!
+ *  Get the next available interface index
+ *  \param[in] pointer to input interface index
+ *  \param[out] pointer to the next available ifindex; in case of null pointer input, gets the lowest available ifindex on the system
+ *  \return     std error code 
+ */
+t_std_error dn_hal_get_next_ifindex(hal_ifindex_t *ifindex, hal_ifindex_t *next_ifindex);
+
+
 /**
  * @}
  */
