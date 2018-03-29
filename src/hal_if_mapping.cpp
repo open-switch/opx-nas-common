@@ -27,7 +27,7 @@
 #include "dell-base-interface-common.h"
 #include "event_log.h"
 #include "std_assert.h"
-#include "std_mutex_lock.h"
+#include "std_rw_lock.h"
 #include "std_utils.h"
 #include <string.h>
 #include <stdio.h>
@@ -43,7 +43,7 @@ using _key_t = uint64_t;
 using if_map_t = std::unordered_map<uint64_t,interface_ctrl_t *>;
 using if_name_map_t = std::unordered_map<std::string, interface_ctrl_t *> ;
 
-static std_mutex_lock_create_static_init_rec(db_locks);
+static std_rw_lock_t db_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 static std::set<interface_ctrl_t *> if_records;
 static std::unordered_map<intf_info_t,if_map_t,std::hash<int32_t>> if_mappings;
@@ -264,7 +264,7 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
 }
 
 t_std_error dn_hal_if_register(hal_intf_reg_op_type_t reg_opt,interface_ctrl_t *detail) {
-    std_mutex_simple_lock_guard l(&db_locks);
+    std_rw_lock_write_guard l(&db_lock);
     if (reg_opt==HAL_INTF_OP_DEREG) {
         _cleanup(detail);
         return STD_ERR_OK;
@@ -302,7 +302,7 @@ t_std_error dn_hal_if_register(hal_intf_reg_op_type_t reg_opt,interface_ctrl_t *
 
 t_std_error dn_hal_get_interface_info(interface_ctrl_t *p) {
     STD_ASSERT(p!=NULL);
-    std_mutex_simple_lock_guard l(&db_locks);
+    std_rw_lock_read_guard l(&db_lock);
     interface_ctrl_t *_p = _locate(p->q_type,p);
     if (_p==nullptr) {
         return STD_ERR(INTERFACE,PARAM,0);
@@ -313,28 +313,26 @@ t_std_error dn_hal_get_interface_info(interface_ctrl_t *p) {
 }
 
 t_std_error dn_hal_get_next_ifindex(hal_ifindex_t *ifindex, hal_ifindex_t *next_ifindex) {
+    std_rw_lock_read_guard l(&db_lock);
     if (ifindex == nullptr) {
         std::set<hal_ifindex_t>::iterator it = if_indexes.begin();
         *next_ifindex = *it;
         return STD_ERR_OK;
     }
 
-    auto it = if_indexes.find(*ifindex);
+    auto it = if_indexes.upper_bound(*ifindex);
     if( it != if_indexes.end()) {
-        it++;
-        if (it != if_indexes.end())
-        	*next_ifindex = *it;
-        else return STD_ERR(INTERFACE,PARAM,0);
+        *next_ifindex = *it;
+        return STD_ERR_OK;
     }
-    else return STD_ERR(INTERFACE,PARAM,0);
-
-    return STD_ERR_OK;
+    
+    return STD_ERR(INTERFACE,PARAM,0);
 }
 
 /*  Update only non- Key attributes like MAC address */
 static t_std_error dn_hal_update_interface(interface_ctrl_t *p) {
     STD_ASSERT(p!=NULL);
-    std_mutex_simple_lock_guard l(&db_locks);
+    std_rw_lock_write_guard l(&db_lock);
     interface_ctrl_t *_p = _locate(p->q_type,p);
     if (_p==nullptr) {
         return STD_ERR(INTERFACE,PARAM,0);
@@ -372,7 +370,7 @@ t_std_error dn_hal_update_intf_desc(hal_ifindex_t ifx, const char *desc) {
     _intf.if_index = ifx;
     _intf.q_type = HAL_INTF_INFO_FROM_IF;
 
-    std_mutex_simple_lock_guard l(&db_locks);
+    std_rw_lock_write_guard l(&db_lock);
     interface_ctrl_t *_p = _locate(_intf.q_type, &_intf);
     if (_p == nullptr) {
         return STD_ERR(INTERFACE, PARAM, 0);
@@ -420,7 +418,7 @@ static void dump_tree_ifname(if_name_map_t &map) {
 }
 
 void dn_hal_dump_interface_mapping(void) {
-    std_mutex_simple_lock_guard l(&db_locks);
+    std_rw_lock_read_guard l(&db_lock);
     printf("Dumping NPU/Port mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_PORT);
 
