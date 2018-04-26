@@ -1,3 +1,9 @@
+opx-nas-common (6.1.0+opx5) unstable; urgency=medium
+  
+  * Update: Enable compiler/linker hardening flags
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Thu, 26 Apr 2018 17:17:56 -0800
+
 opx-nas-common (6.1.0+opx4) unstable; urgency=medium
 
   * Update: Support to get next closest ifindex even if the input index is not available in the system
