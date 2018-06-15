@@ -49,6 +49,9 @@ typedef uint64_t  ndi_obj_id_t;
 
 typedef nas_obj_id_t lag_id_t;
 
+typedef ndi_obj_id_t nas_bridge_id_t;
+#define NAS_INVALID_BRIDGE_ID  ((nas_bridge_id_t)~0x0)
+
 /** NAS CPS handler common Error codes */
 #define    NAS_BASE_E_NONE           (int)STD_ERR_OK
 #define    NAS_BASE_E_MEM            (int)STD_ERR (HALCOM, NOMEM, 0)

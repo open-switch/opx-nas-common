@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 #define NAS_CMN_PROFILE_NAME_SIZE 64
+#define NAS_CMN_NPU_PROFILE_ATTR_SIZE 256
 #define NAS_CMN_MAX_ECMP_ENTRIES_PER_GRP_DEF 64
 #define NAS_CMN_MAX_ECMP_ENTRIES_PER_GRP_MAX 1024
 #define NAS_CMN_MAX_ECMP_ENTRIES_PER_GRP_MIN 2
@@ -215,6 +216,17 @@ t_std_error nas_sw_profile_conf_max_ecmp_per_grp_set(uint32_t conf_max_ecmp_per_
  */
 t_std_error nas_sw_profile_conf_max_ecmp_per_grp_get(uint32_t *conf_max_ecmp_per_grp);
 
+/**
+ * This function gets next key/value pair from Switch NPU Profile populated from
+ * the switch.xml file
+ * @param Pointer to the next Key Value pair
+ * NOTE : This API get the Key/Value attributes that are of size 256
+ *        (NAS_CMN_NPU_PROFILE_ATTR_SIZE). Please use this API with caution by
+ *        passing Array of size 256 (Eg: nas_ndi_populate_cfg_key_value_pair ())
+ * @return standard error
+ */
+t_std_error nas_switch_npu_profile_get_next_value(char* variable,
+                                                  char* value);
 #ifdef __cplusplus
 } /* extern C */
 #endif

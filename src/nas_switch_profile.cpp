@@ -36,8 +36,13 @@
 #include "nas_sw_profile_api.h"
 #include "nas_sw_profile.h"
 #include "std_utils.h"
+#include <map>
+#include <string>
 
 static nas_cmn_sw_init_info_t nas_switch_info;
+typedef std::map<std::string, std::string> nas_sw_npu_profile_kv_pair_t;
+typedef std::map<std::string, std::string>::iterator npu_profile_kv_iter;
+static auto npu_profile_kvpair = new nas_sw_npu_profile_kv_pair_t;
 
 static uint32_t nas_std_child_node_count_get(std_config_node_t node)
 {
@@ -125,6 +130,97 @@ t_std_error nas_switch_update_profile_info (std_config_node_t node)
     return STD_ERR_OK;
 }
 
+extern "C" {
+/* parse switch.xml file and update switch NPU profile */
+t_std_error nas_switch_update_npu_profile_info (std_config_node_t node)
+{
+    uint32_t num_profiles;
+    std_config_node_t chld_node;
+    char *key_attr = NULL;
+    char *value_attr = NULL;
+    npu_profile_kv_iter kviter;
+
+    num_profiles = nas_std_child_node_count_get(node);
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS_CMN-SWITCH",
+            "Num of Key/Value pairs read from switch config file %d \r\n", 
+            num_profiles);
+
+    if(num_profiles == 0) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "NPU Profile's not present in config file ");
+        return STD_ERR(HALCOM, PARAM, ENOENT);
+    }
+
+    for (chld_node = std_config_get_child(node); chld_node != NULL; 
+            (chld_node = std_config_next_node(chld_node))) {
+
+         if (((key_attr = std_config_attr_get(chld_node, "id")) == NULL) ||
+             ((value_attr = std_config_attr_get(chld_node, "value")) == NULL)) {
+             /* Skip if the attibute is not present or one of the variable/value
+                is missing */
+             continue;
+         }
+         if (strlen (key_attr) >= NAS_CMN_NPU_PROFILE_ATTR_SIZE ||
+                 strlen (value_attr) >= NAS_CMN_NPU_PROFILE_ATTR_SIZE)
+         {
+             /* Check and skip if the attribute value length is > than
+                NAS_CMN_NPU_PROFILE_ATTR_SIZE */
+             continue;
+         }
+
+         EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "NPU Profile Key %s Value %s", key_attr, value_attr);
+         kviter = npu_profile_kvpair->find(key_attr);
+
+         if (kviter == npu_profile_kvpair->end()) {
+             npu_profile_kvpair->insert(std::pair<std::string, std::string>(key_attr, value_attr));
+         }
+         else {
+             kviter->second = value_attr;
+         }
+    }
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","Number of Profiles : %d", num_profiles);
+    return STD_ERR_OK;
+    }
+}
+
+t_std_error nas_switch_npu_profile_get_next_value(char* variable,
+                           char* value)
+{
+    npu_profile_kv_iter kviter;
+    std::string key;
+
+    if (variable == NULL || value == NULL) {
+        return STD_ERR(HALCOM, PARAM, ENOENT);
+    }
+
+    /*Check if this is query to get the First Key/Value pair */
+    if (strlen(variable) == 0) {
+        if (npu_profile_kvpair->size() < 1) {
+            return STD_ERR(HALCOM, PARAM, ENOENT);
+        }
+        /* Return the 1st element in the KV Pair Map */
+        kviter = npu_profile_kvpair->begin();
+    } else {
+        key = variable;
+        kviter = npu_profile_kvpair->find(key);
+        if (kviter == npu_profile_kvpair->end()) {
+            return STD_ERR(HALCOM, FAIL,0);
+        }
+        kviter++;
+        if (kviter == npu_profile_kvpair->end()) {
+            return STD_ERR(HALCOM, FAIL,0);
+        }
+    }
+    safestrncpy(variable, kviter->first.c_str(), NAS_CMN_NPU_PROFILE_ATTR_SIZE);
+    safestrncpy(value, kviter->second.c_str(), NAS_CMN_NPU_PROFILE_ATTR_SIZE);
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH", "Get next key-value pair key %s, value %s\n",
+               variable, value);
+    return STD_ERR_OK;
+}
 /* parse switch.xml file and update UFT modes and info */
 t_std_error nas_switch_update_uft_info (std_config_node_t node)
 {
@@ -358,8 +454,8 @@ t_std_error nas_sw_profile_conf_profile_set(uint32_t sw_id, char *conf_profile,
 {
     if (op_type == cps_api_oper_DELETE)
     {
-        EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","Delete configured profile, set to default ",
-                    conf_profile);
+        EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","Delete configured profile %s, set to default ",
+                    (conf_profile)?conf_profile:"NULL");
         memset(nas_switch_info.next_boot_profile.name, 0,
                 sizeof(nas_switch_info.next_boot_profile.name));
         strncpy(nas_switch_info.next_boot_profile.name,

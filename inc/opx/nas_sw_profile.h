@@ -80,6 +80,7 @@ typedef struct {
 t_std_error nas_switch_update_ecmp_info (std_config_node_t node);
 t_std_error nas_switch_update_uft_info (std_config_node_t node);
 t_std_error nas_switch_update_profile_info(std_config_node_t node);
+t_std_error nas_switch_update_npu_profile_info (std_config_node_t node);
 
 #ifdef __cplusplus
 }

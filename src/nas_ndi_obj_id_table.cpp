@@ -134,7 +134,7 @@ bool nas::ndi_obj_id_table_cps_serialize (const ndi_obj_id_table_t& table,
         // Insert the NDI Obj ID in the CPS object
         internal_ids.push_back (OPAQUE_NDI_OBJ_ATTR_ID);
         auto ndi_obj_id = map_elem.second;
-        NAS_COM_TRACE ("Serialize [Inst %d] NPU-ID %d : NDI-ID 0x%lx\n",
+        NAS_COM_TRACE ("Serialize [Inst %lu] NPU-ID %d : NDI-ID 0x%lx\n",
                        inst_attr_id, npu_id, ndi_obj_id);
 
         if (!cps_api_object_e_add(cps_obj, internal_ids.data(), internal_ids.size(),
