@@ -92,7 +92,8 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
 
         switch_cfg = (nas_switch_detail_t *)calloc(switches.number_of_switches,sizeof(*switch_cfg));
         if (switch_cfg==NULL) failed = true;
-        if (failed) EV_LOGGING(NAS_COM, ERR, "SWITCH","memory alloc failed switch file config. Exiting...",switch_ids,switch_cfg_path);
+        if (failed) EV_LOGGING(NAS_COM, ERR, "SWITCH","memory alloc failed Switch ID %s Switch File config %s. Exiting...",
+                               switch_ids,switch_cfg_path);
     }
 
     if (strcmp(name,"switch")==0) {
@@ -133,6 +134,10 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
     if (strncmp(name,"switch_profile", strlen(name))==0) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch profile info");
         nas_switch_update_profile_info(node);
+    }
+    if (strncmp(name,"switch_npu_profile", strlen(name))==0) {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse NPU Switch Profile Info");
+        nas_switch_update_npu_profile_info(node);
     }
     if (strncmp(name,"switch_forwarding_mode", strlen(name))==0) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch UFT info");

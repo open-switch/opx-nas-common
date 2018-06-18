@@ -15,11 +15,11 @@ Description: This package contains common utilities for the network abstraction 
 
 Package: libopx-nas-common-dev
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},libopx-common-dev (>= 1.4.0),libopx-cps-dev (>= 3.6.2),libopx-logging-dev (>= 2.1.0),
+Depends: ${misc:Depends},libopx-common-dev (>= 1.4.0),libopx-cps-dev (>= 3.6.2),libopx-logging-dev (>= 2.1.0),
         libopx-base-model-dev (>= 3.109.0),libopx-nas-common1 (=${binary:Version})
 Description: This package contains common utilities for the network abstraction component.
 
 Package: opx-nas-common
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-opx-cps (>= 3.6.2)
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-opx-cps (>= 3.6.2)
 Description: This package contains common utilities for the network abstraction component.

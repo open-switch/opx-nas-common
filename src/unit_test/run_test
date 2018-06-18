@@ -1,0 +1,4 @@
+#!/bin/bash
+
+./nas_if_mapping_unittest
+./nas_base_ut_intf_desc

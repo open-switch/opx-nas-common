@@ -50,6 +50,8 @@ static std::unordered_map<intf_info_t,if_map_t,std::hash<int32_t>> if_mappings;
 
 static if_name_map_t if_name_map;
 
+static _key_t INVALID_KEY = (~0);
+
 static std::set<hal_ifindex_t> if_indexes;
 
 static const intf_info_t _has_key_t[] = {
@@ -58,6 +60,7 @@ static const intf_info_t _has_key_t[] = {
         HAL_INTF_INFO_FROM_TAP,
         HAL_INTF_INFO_FROM_VLAN,
         HAL_INTF_INFO_FROM_LAG,
+        HAL_INTF_INFO_FROM_BRIDGE_ID
 };
 
 static const size_t _has_key_t_len = sizeof(_has_key_t)/sizeof(*_has_key_t);
@@ -68,7 +71,8 @@ static const intf_info_t _all_queries_t[] = {
         HAL_INTF_INFO_FROM_TAP,
         HAL_INTF_INFO_FROM_IF_NAME,
         HAL_INTF_INFO_FROM_VLAN,
-        HAL_INTF_INFO_FROM_LAG
+        HAL_INTF_INFO_FROM_LAG,
+        HAL_INTF_INFO_FROM_BRIDGE_ID
 
 };
 static const size_t _all_queries_t_len = sizeof(_all_queries_t)/sizeof(*_all_queries_t);
@@ -111,6 +115,10 @@ static inline bool _query_valid(intf_info_t q_type, nas_int_type_t if_type)
             return true;
         }
         break;
+    case HAL_INTF_INFO_FROM_BRIDGE_ID:
+        if (if_type == nas_int_type_DOT1D_BRIDGE) {
+            return true;
+        }
     }
 
     return false;
@@ -119,7 +127,11 @@ static inline bool _query_valid(intf_info_t q_type, nas_int_type_t if_type)
 static _key_t _mk_key(intf_info_t type,interface_ctrl_t *rec) {
     switch(type) {
     case HAL_INTF_INFO_FROM_PORT:
-        return _mk_key(rec->npu_id, rec->port_id);
+        if (rec->port_mapped) {
+            return _mk_key(rec->npu_id, rec->port_id);
+        } else {
+            return INVALID_KEY;
+        }
     case HAL_INTF_INFO_FROM_LAG:
         return rec->lag_id;
     case HAL_INTF_INFO_FROM_VLAN:
@@ -127,11 +139,17 @@ static _key_t _mk_key(intf_info_t type,interface_ctrl_t *rec) {
     case HAL_INTF_INFO_FROM_IF:
         return _mk_key(rec->vrf_id,rec->if_index);
     case HAL_INTF_INFO_FROM_TAP:
-        return rec->tap_id;
+        if (rec->port_mapped) {
+            return rec->tap_id;
+        } else {
+            return INVALID_KEY;
+        }
+    case HAL_INTF_INFO_FROM_BRIDGE_ID:
+        return rec->bridge_id;
     default:
         break;
     }
-    return 0;
+    return INVALID_KEY;
 }
 
 /**
@@ -146,7 +164,7 @@ static interface_ctrl_t *_locate(intf_info_t type, interface_ctrl_t *rec) {
         return if_name_map.at(rec->if_name);
     }
     uint64_t k = _mk_key(type,rec);
-    if (k==0) return NULL;
+    if (k==INVALID_KEY) return NULL;
     auto it = if_mappings[type].find(k);
     if (it==if_mappings[type].end()) return NULL;
     return it->second;
@@ -161,7 +179,7 @@ static bool _add(intf_info_t type, interface_ctrl_t *rec) {
         if_name_map[rec->if_name] = rec;
     } else {
         _key_t k = _mk_key(type,rec);
-        if (k==0) return false;
+        if (k==INVALID_KEY) return false;
         if_mappings[type][k] = rec;
     }
     if_indexes.insert(rec->if_index);
@@ -173,33 +191,39 @@ static bool _add(intf_info_t type, interface_ctrl_t *rec) {
  */
 static void _cleanup(interface_ctrl_t *rec) {
     size_t ix = 0;
+    interface_ctrl_t *_rec = nullptr;
+
+    if (rec==nullptr) return;
+
     for ( ; ix < _all_queries_t_len ; ++ix ) {
-        interface_ctrl_t *_rec  = _locate(_all_queries_t[ix],rec);
+        _rec  = _locate(_all_queries_t[ix],rec);
         if (_rec==nullptr) continue;
-        rec = _rec;
         break;
     }
 
-    if (rec==nullptr) return ;
+    /* Interface does not exist, return */
+    if (_rec==nullptr) return;
 
     ix = 0;
     for ( ; ix < _has_key_t_len ; ++ix ) {
-        if (!_query_valid(_has_key_t[ix], rec->int_type)) {
+        if (!_query_valid(_has_key_t[ix], _rec->int_type)) {
             continue;
         }
-        _key_t k = _mk_key(_has_key_t[ix],rec);
-        if(k==0) continue;
+        _key_t k = _mk_key(_has_key_t[ix],_rec);
+        if(k==INVALID_KEY) continue;
         if_mappings[_has_key_t[ix]].erase(k);
     }
-    if (strlen(rec->if_name)>0) {
-        if_name_map.erase(rec->if_name);
+    if (strlen(_rec->if_name)>0) {
+        if_name_map.erase(_rec->if_name);
     }
-    if (rec->desc) {
-        delete [] rec->desc;
+
+    if (_rec->desc) {
+        delete [] _rec->desc;
     }
-    if_records.erase(rec);
-    if_indexes.erase(rec->if_index);
-    delete rec;
+
+    if_records.erase(_rec);
+    if_indexes.erase(_rec->if_index);
+    delete _rec;
 }
 
 extern "C" {
@@ -214,6 +238,22 @@ static std::map<nas_int_type_t, const char *> nas_to_ietf_if_types  =
     {nas_int_type_FC, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL},
     {nas_int_type_MACVLAN, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN},
     {nas_int_type_MGMT, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT},
+    {nas_int_type_VXLAN, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN},
+    {nas_int_type_VLANSUB_INTF, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE},
+};
+
+static auto ietf_to_nas_types  = new std::unordered_map<std::string,nas_int_type_t>
+{
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU, nas_int_type_CPU},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_ETHERNETCSMACD, nas_int_type_PORT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN, nas_int_type_VLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG, nas_int_type_LAG},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK, nas_int_type_LPBK},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, nas_int_type_FC},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN, nas_int_type_MACVLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, nas_int_type_MGMT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN, nas_int_type_VXLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE, nas_int_type_VLANSUB_INTF},
 };
 
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t size)
@@ -229,38 +269,13 @@ bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t si
 //Conversion from ietf interface type to dell intf type
 bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
 {
-    bool ret = true;
-
-    if (strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_ETHERNETCSMACD, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_ETHERNETCSMACD)) == 0) {
-        *if_type =  nas_int_type_PORT;
-
-    } else if (strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN)) == 0) {
-        *if_type =  nas_int_type_VLAN;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG)) == 0) {
-        *if_type =  nas_int_type_LAG;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU)) == 0) {
-        *if_type =  nas_int_type_CPU;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK)) == 0) {
-        *if_type =  nas_int_type_LPBK;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL)) == 0) {
-        *if_type =  nas_int_type_FC;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN)) == 0) {
-        *if_type =  nas_int_type_MACVLAN;
-    } else if(strncmp(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, ietf_type,
-            strlen(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT)) == 0) {
-        *if_type =  nas_int_type_MGMT;
-    } else {
-        ret = false;
+    auto it = ietf_to_nas_types->find(std::string(ietf_type));
+    if(it != ietf_to_nas_types->end()){
+        *if_type = it->second;
+        return true;
     }
 
-    return ret;
+    return false;
 }
 
 t_std_error dn_hal_if_register(hal_intf_reg_op_type_t reg_opt,interface_ctrl_t *detail) {
@@ -302,6 +317,11 @@ t_std_error dn_hal_if_register(hal_intf_reg_op_type_t reg_opt,interface_ctrl_t *
 
 t_std_error dn_hal_get_interface_info(interface_ctrl_t *p) {
     STD_ASSERT(p!=NULL);
+    if (p->q_type == HAL_INTF_INFO_FROM_PORT) {
+        // If query interface by its NPU port, the interface
+        // should be mapped interface.
+        p->port_mapped = true;
+    }
     std_rw_lock_read_guard l(&db_lock);
     interface_ctrl_t *_p = _locate(p->q_type,p);
     if (_p==nullptr) {
@@ -325,7 +345,7 @@ t_std_error dn_hal_get_next_ifindex(hal_ifindex_t *ifindex, hal_ifindex_t *next_
         *next_ifindex = *it;
         return STD_ERR_OK;
     }
-    
+
     return STD_ERR(INTERFACE,PARAM,0);
 }
 
@@ -355,42 +375,74 @@ t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac) {
     EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for MAC intf  %s MAC %s", _intf.if_name, mac);
     return(dn_hal_update_interface(&_intf));
 }
+/* Update router interface (non-default VRF context) for lower layer interface (default VRF context) */
+t_std_error nas_cmn_update_router_intf_info(hal_vrf_id_t vrf_id, hal_ifindex_t ifx,
+                                            l3_intf_info_t *info) {
 
-t_std_error dn_hal_update_intf_desc(hal_ifindex_t ifx, const char *desc) {
+    STD_ASSERT(info!=NULL);
+    std_rw_lock_write_guard l(&db_lock);
+    interface_ctrl_t _intf;
+    memset(&_intf, 0, sizeof(_intf));
+    _intf.vrf_id = vrf_id;
+    _intf.if_index = ifx;
+    _intf.q_type = HAL_INTF_INFO_FROM_IF;
+    interface_ctrl_t *_p = _locate(_intf.q_type, &_intf);
+    if (_p==nullptr) {
+        return STD_ERR(INTERFACE,PARAM,0);
+    }
+    memcpy(&(_p->l3_intf_info), info, sizeof(l3_intf_info_t));
+
+    EV_LOGGING(INTERFACE,INFO,"NAS-IF-UPDATE",
+               "Update router interface vrf-id:%d if-index:%d for parent interface vrf-id:%d if-index:%d",
+               vrf_id, ifx, info->vrf_id, info->if_index);
+    return STD_ERR_OK;
+}
+
+t_std_error dn_hal_update_intf_desc(interface_ctrl_t *p, const char *desc) {
 
     STD_ASSERT(desc!=NULL);
+    STD_ASSERT(p!=NULL);
+
     if (strlen(desc) > MAX_INTF_DESC_LEN) {
         return STD_ERR(INTERFACE, PARAM, 0);
     }
 
-    interface_ctrl_t _intf;
     size_t desc_len = strlen(desc);
 
-    memset(&_intf, 0, sizeof(_intf));
-    _intf.if_index = ifx;
-    _intf.q_type = HAL_INTF_INFO_FROM_IF;
-
     std_rw_lock_write_guard l(&db_lock);
-    interface_ctrl_t *_p = _locate(_intf.q_type, &_intf);
+    interface_ctrl_t *_p = _locate(p->q_type, p);
     if (_p == nullptr) {
         return STD_ERR(INTERFACE, PARAM, 0);
     }
- 
+
     if (_p->desc != nullptr) {
         delete[] _p->desc;
     }
 
-    /** We check the length of description and ensure the first character
-    is alphanumeric because CPS uses '/036' for a blank string
-    instead of '/0' **/
+    /**
+      * We check the length of description and ensure the first character
+      * is alphanumeric because CPS uses '/036' for a blank string
+      * instead of '/0'. Blank or empty string means the attribute is going
+      * to be cleared.
+      *
+    **/
+
     if (desc_len == 0 || !isalnum(desc[0])) {
         _p->desc = nullptr;
     } else {
-        _p->desc = new char[desc_len];
+        try {
+            /* +1 to allocation size to account for '\0' character */
+            _p->desc = new char[desc_len + 1];
+        } catch (std::bad_alloc& ba) {
+            EV_LOGGING(INTERFACE,ERR,"NAS-IF-REG",
+                "Memory allocation fail for interface description.");
+            return STD_ERR(INTERFACE, PARAM, 0);
+        }
+
         safestrncpy(_p->desc, desc, desc_len + 1);
     }
 
-    EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for description intf %s desc: %s", _intf.if_name, desc);
+    EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update description for intf %s changed to: %s", _p->if_name, desc);
     return STD_ERR_OK;
 }
 
@@ -436,6 +488,10 @@ void dn_hal_dump_interface_mapping(void) {
 
     printf("Dumping LAG ID mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_LAG);
+
+    printf("Dumping BRIDGE ID mapping...\n");
+    dump_tree(HAL_INTF_INFO_FROM_BRIDGE_ID);
+
 
 }
 
