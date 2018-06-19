@@ -8,4 +8,4 @@ This repository contains common utilities used by the network abstraction servic
 
 See [Architecture](https://github.com/open-switch/opx-docs/wiki/Architecture) for more information on the NAS common utilities.
 
-(c) 2017 Dell EMC 
+(c) 2018 Dell Inc. or its subsidiaries. All Rights Reserved.
