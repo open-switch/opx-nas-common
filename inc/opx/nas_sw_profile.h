@@ -75,13 +75,34 @@ typedef struct {
    uint32_t next_boot_max_ecmp_per_grp;
    /* default value of "max ecmp entries per group" */
    uint32_t def_max_ecmp_per_grp;
+
+   /* Is configuration required to support IPv6 extended prefix routes in LPM " */
+   uint32_t is_ipv6_ext_prefix_cfg_req;
+
+   /* Default value of supported "IPv6 extended prefix routes in LPM" */
+   uint32_t def_ipv6_ext_prefix_routes;
+
+   /* Max value of supported "IPv6 extended prefix routes in LPM" */
+   uint32_t max_ipv6_ext_prefix_routes;
+
+   /* current value of "IPv6 extended prefix routes in LPM" */
+   uint32_t cur_ipv6_ext_prefix_routes;
+
+   /* configured value of "IPv6 extended prefix routes in LPM",
+        (will be active on next save and reboot */
+   uint32_t next_ipv6_ext_prefix_routes;
+
+   /* IPv6 LPM entries will be allocated in blocks,
+    *  This varibale to define block size */
+   uint32_t ipv6_ext_prefix_route_blk_size;
+
 }nas_cmn_sw_init_info_t;
 
 t_std_error nas_switch_update_ecmp_info (std_config_node_t node);
 t_std_error nas_switch_update_uft_info (std_config_node_t node);
 t_std_error nas_switch_update_profile_info(std_config_node_t node);
 t_std_error nas_switch_update_npu_profile_info (std_config_node_t node);
-
+t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node);
 #ifdef __cplusplus
 }
 #endif /* extern C */

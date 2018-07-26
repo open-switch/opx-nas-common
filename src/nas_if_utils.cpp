@@ -146,7 +146,7 @@ t_std_error nas_get_lag_id_from_if_index (hal_ifindex_t if_index, lag_id_t *lag_
     intf_ctrl.if_index = if_index;
 
     if((rc=dn_hal_get_interface_info(&intf_ctrl)) != STD_ERR_OK) {
-        EV_LOGGING(INTERFACE, ERR, "INTF-C","Interface %d returned error %d",
+        EV_LOGGING(INTERFACE, DEBUG, "INTF-C","Interface %d returned error %d",
                 intf_ctrl.if_index, rc);
         return rc;
     }
@@ -195,7 +195,7 @@ bool nas_is_virtual_port(hal_ifindex_t if_idx)
     _port.q_type = HAL_INTF_INFO_FROM_IF;
 
     if (dn_hal_get_interface_info(&_port) != STD_ERR_OK) {
-        EV_LOGGING(INTERFACE, ERR,"INTF-C","Failed to get if_info");
+        EV_LOGGING(INTERFACE, DEBUG,"INTF-C","Failed to get if_info");
         return false;
     }
 
@@ -219,7 +219,7 @@ bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj, nas_int_port_mapp
     }
     cps_api_operation_types_t op = cps_api_object_type_operation(evt_key);
     if (op != cps_api_oper_SET) {
-        EV_LOGGING(INTERFACE, ERR, "INTF-C", "Not interface config set event");
+        EV_LOGGING(INTERFACE, DEBUG, "INTF-C", "Not interface config set event");
         return false;
     }
     cps_api_object_attr_t npu_attr =
@@ -227,7 +227,7 @@ bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj, nas_int_port_mapp
     cps_api_object_attr_t port_attr =
         cps_api_object_attr_get(evt_obj, BASE_IF_PHY_IF_INTERFACES_INTERFACE_PORT_ID);
     if (npu_attr == NULL || port_attr == NULL) {
-        EV_LOGGING(INTERFACE, ERR, "INTF-C", "No npu port attribute found in event object");
+        EV_LOGGING(INTERFACE, DEBUG, "INTF-C", "No npu port attribute found in event object");
         return false;
     }
     npu_id_t npu = cps_api_object_attr_data_u32(npu_attr);

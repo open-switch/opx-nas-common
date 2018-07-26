@@ -227,6 +227,48 @@ t_std_error nas_sw_profile_conf_max_ecmp_per_grp_get(uint32_t *conf_max_ecmp_per
  */
 t_std_error nas_switch_npu_profile_get_next_value(char* variable,
                                                   char* value);
+/**
+ * This function gets cur_ipv6_ext_prefix_routes value
+ * @param cur_ipv6_ext_prefix_routes[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_cur_ipv6_ext_prefix_routes_get(uint32_t *cur_ipv6_ext_prefix_routes);
+
+/**
+ * This function gets conf_ipv6_ext_prefix_routes value
+ * @param conf_ipv6_ext_prefix_routes[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_get(uint32_t *conf_ipv6_ext_prefix_routes);
+
+/**
+ * This function sets conf ipv6 ext prefix routes value
+ * @param conf_ipv6_ext_prefix_routes value
+ * @param op_type, cps api operation type(create,delete,set etc.)
+ * @return standard error
+ */
+t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_set(uint32_t conf_ipv6_ext_prefix_routes,
+                                        cps_api_operation_types_t op_type);
+/**
+ * This function to get ipv6 ext prefix configuration required or not
+ * @return true or false
+ */
+bool nas_sw_profile_is_ipv6_ext_prefix_config_required();
+
+/**
+ * This function gets max_ipv6_ext_prefix_routes value
+ * @param max_ipv6_ext_prefix_routes[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_max_ipv6_ext_prefix_routes_get(uint32_t *max_ipv6_ext_prefix_routes);
+
+/**
+ * This function gets ipv6_ext_prefix_route_blk_size value
+ * @param ipv6_ext_prefix_route_blk_size[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_ipv6_ext_prefix_route_lpm_blk_size_get(uint32_t *ipv6_ext_prefix_route_blk_size);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

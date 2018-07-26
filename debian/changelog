@@ -1,3 +1,12 @@
+opx-nas-common (7.1.0+vxlan1) unstable; urgency=medium
+  
+  * Feature: VxLAN Support
+  * Update: Add Ipv6 Extended prefix handler code
+  * Update: Remove unnecessary logs
+  * Update: Add ietf to linux type converstion
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Wed, 25 Jul 2018 17:17:56 -0800
+
 opx-nas-common (7.1.0) unstable; urgency=medium
 
   * Feature: Routing VRF

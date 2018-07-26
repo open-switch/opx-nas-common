@@ -22,6 +22,7 @@
  * hal_if_mapping.cpp
  */
 
+#include "dell-base-common.h"
 #include "hal_if_mapping.h"
 #include "iana-if-type.h"
 #include "dell-base-interface-common.h"
@@ -271,6 +272,32 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
 {
     auto it = ietf_to_nas_types->find(std::string(ietf_type));
     if(it != ietf_to_nas_types->end()){
+        *if_type = it->second;
+        return true;
+    }
+
+    return false;
+}
+
+static auto ietf_to_nas_os_types  = new std::unordered_map<std::string,BASE_CMN_INTERFACE_TYPE_t>
+{
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU, BASE_CMN_INTERFACE_TYPE_CPU},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_ETHERNETCSMACD, BASE_CMN_INTERFACE_TYPE_L3_PORT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN, BASE_CMN_INTERFACE_TYPE_VLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG, BASE_CMN_INTERFACE_TYPE_LAG},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK, BASE_CMN_INTERFACE_TYPE_LOOPBACK},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, BASE_CMN_INTERFACE_TYPE_L3_PORT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN, BASE_CMN_INTERFACE_TYPE_MACVLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, BASE_CMN_INTERFACE_TYPE_MANAGEMENT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN, BASE_CMN_INTERFACE_TYPE_VXLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE, BASE_CMN_INTERFACE_TYPE_VLAN_SUBINTF},
+};
+
+//Conversion from ietf interface type to linux intf type
+bool ietf_to_nas_os_if_type_get(const char *ietf_type, BASE_CMN_INTERFACE_TYPE_t *if_type)
+{
+    auto it = ietf_to_nas_os_types->find(std::string(ietf_type));
+    if(it != ietf_to_nas_os_types->end()){
         *if_type = it->second;
         return true;
     }

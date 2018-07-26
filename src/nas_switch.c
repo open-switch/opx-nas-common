@@ -148,6 +148,12 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         nas_switch_update_ecmp_info(node);
     }
 
+    if (strncmp(name,"ipv6_extended_prefix", strlen(name))==0)
+    {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch IPv6 Extended prefix info");
+        nas_switch_update_ipv6_extended_prefix_info (node);
+    }
+
 }
 
 t_std_error nas_switch_init(void) {
