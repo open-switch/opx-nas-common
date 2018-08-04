@@ -143,7 +143,7 @@ t_std_error nas_switch_update_npu_profile_info (std_config_node_t node)
     num_profiles = nas_std_child_node_count_get(node);
 
     EV_LOGGING(NAS_COM, DEBUG, "NAS_CMN-SWITCH",
-            "Num of Key/Value pairs read from switch config file %d \r\n", 
+            "Num of Key/Value pairs read from switch config file %d \r\n",
             num_profiles);
 
     if(num_profiles == 0) {
@@ -152,7 +152,7 @@ t_std_error nas_switch_update_npu_profile_info (std_config_node_t node)
         return STD_ERR(HALCOM, PARAM, ENOENT);
     }
 
-    for (chld_node = std_config_get_child(node); chld_node != NULL; 
+    for (chld_node = std_config_get_child(node); chld_node != NULL;
             (chld_node = std_config_next_node(chld_node))) {
 
          if (((key_attr = std_config_attr_get(chld_node, "id")) == NULL) ||
@@ -280,6 +280,40 @@ t_std_error nas_switch_update_ecmp_info (std_config_node_t node)
     nas_switch_info.cur_max_ecmp_per_grp = nas_switch_info.def_max_ecmp_per_grp;
     EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","num_ecmp_values:%d",
                                 nas_switch_info.cur_max_ecmp_per_grp);
+    return STD_ERR_OK;
+}
+
+/* parse switch.xml file and update IPv6 Extended prefix info */
+t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node)
+{
+    nas_std_cfg_attr_update(node, "config_required",
+                                &nas_switch_info.is_ipv6_ext_prefix_cfg_req);
+
+    if (nas_switch_info.is_ipv6_ext_prefix_cfg_req) {
+
+        nas_std_cfg_attr_update(node, "default_routes",
+                                &nas_switch_info.def_ipv6_ext_prefix_routes);
+
+        nas_std_cfg_attr_update(node, "max_routes",
+                                &nas_switch_info.max_ipv6_ext_prefix_routes);
+
+        nas_std_cfg_attr_update(node, "lpm_block_size",
+                                &nas_switch_info.ipv6_ext_prefix_route_blk_size);
+
+        /* Init default value as current value */
+        nas_switch_info.cur_ipv6_ext_prefix_routes = nas_switch_info.def_ipv6_ext_prefix_routes;
+        nas_switch_info.next_ipv6_ext_prefix_routes = nas_switch_info.cur_ipv6_ext_prefix_routes;
+    }
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","IPv6 Ext prefix Cfg Required:%d",
+                                nas_switch_info.is_ipv6_ext_prefix_cfg_req);
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","IPv6 Extended prefix route, "
+                                "Default:%d, Max:%d, Blk size:%d",
+                                nas_switch_info.def_ipv6_ext_prefix_routes,
+                                nas_switch_info.max_ipv6_ext_prefix_routes,
+                                nas_switch_info.ipv6_ext_prefix_route_blk_size);
+
     return STD_ERR_OK;
 }
 
@@ -766,10 +800,11 @@ t_std_error nas_sw_profile_conf_max_ecmp_per_grp_set(uint32_t conf_max_ecmp_per_
 
 t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 {
-    bool profile_found, uft_found, ecmp_found;
+    bool profile_found, uft_found, ecmp_found, ipv6_ext_prefix_found;
     char *conf_profile = NULL;
 
     profile_found = uft_found = ecmp_found = false;
+    ipv6_ext_prefix_found = false;
 
     cps_api_object_list_t list = nas_sw_profile_startup_cps_db_get();
 
@@ -823,6 +858,14 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
                     ecmp_found = true;
                 }
                 break;
+                case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_IPV6_EXTENDED_PREFIX_ROUTES:
+                {
+                    nas_switch_info.next_ipv6_ext_prefix_routes = cps_api_object_attr_data_u32(it.attr);
+                    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch ipv6 extended prefix routes from DB %d",
+                                                nas_switch_info.next_ipv6_ext_prefix_routes);
+                    ipv6_ext_prefix_found = true;
+                }
+                break;
                 default:
                 break;
             }
@@ -855,6 +898,12 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
         EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch max_ecmp_per_grp not present in DB,"
                         "set default %d", nas_switch_info.next_boot_max_ecmp_per_grp);
     }
+    if (ipv6_ext_prefix_found == false)
+    {
+        nas_switch_info.next_ipv6_ext_prefix_routes =  nas_switch_info.def_ipv6_ext_prefix_routes;
+        EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch ipv6_ext_prefix_routes not present in DB,"
+                        "set default %d", nas_switch_info.next_ipv6_ext_prefix_routes);
+    }
 
     /* Update current values, same as next boot values on the boot */
     strncpy(nas_switch_info.current_profile.name,
@@ -862,6 +911,7 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
             sizeof(nas_switch_info.current_profile.name));
     nas_switch_info.current_uftmode = nas_switch_info.next_boot_uftmode;
     nas_switch_info.cur_max_ecmp_per_grp = nas_switch_info.next_boot_max_ecmp_per_grp;
+    nas_switch_info.cur_ipv6_ext_prefix_routes = nas_switch_info.next_ipv6_ext_prefix_routes;
 
     /* In some cases there will be stale values in DB with RUNNING qualifier,
        clear them*/
@@ -895,6 +945,9 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
     cps_api_object_attr_add_u32(db_obj,
                                 BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_ECMP_ENTRY_PER_GROUP,
                                 nas_switch_info.cur_max_ecmp_per_grp);
+   cps_api_object_attr_add_u32(db_obj,
+                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_IPV6_EXTENDED_PREFIX_ROUTES,
+                                nas_switch_info.cur_ipv6_ext_prefix_routes);
 
     cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
     if (ret != cps_api_ret_code_OK)
@@ -906,6 +959,179 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 
     cps_api_object_delete(db_obj);
 
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_cur_ipv6_ext_prefix_routes_get - will get current confiured ipv6
+    extended prefix routes */
+bool nas_sw_profile_is_ipv6_ext_prefix_config_required(void)
+{
+    return (nas_switch_info.is_ipv6_ext_prefix_cfg_req ? true : false);
+}
+
+
+/* nas_sw_profile_cur_ipv6_ext_prefix_routes_get - will get current confiured ipv6
+    extended prefix routes */
+t_std_error nas_sw_profile_cur_ipv6_ext_prefix_routes_get(uint32_t *cur_ipv6_ext_prefix_routes)
+{
+    if (nas_sw_profile_is_ipv6_ext_prefix_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","To Support IPv6 Extended prefix routes,"
+                   "config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (cur_ipv6_ext_prefix_routes == NULL) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+    *cur_ipv6_ext_prefix_routes = nas_switch_info.cur_ipv6_ext_prefix_routes;
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_max_ipv6_ext_prefix_routes_get - will get max supportedipv6
+    extended prefix routes */
+t_std_error nas_sw_profile_max_ipv6_ext_prefix_routes_get(uint32_t *max_ipv6_ext_prefix_routes)
+{
+    if (nas_sw_profile_is_ipv6_ext_prefix_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","To Support IPv6 Extended prefix routes,"
+                   "config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (max_ipv6_ext_prefix_routes == NULL) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+    *max_ipv6_ext_prefix_routes = nas_switch_info.max_ipv6_ext_prefix_routes;
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_ipv6_ext_prefix_route_lpm_blk_size_get - will get max supported ipv6
+    extended prefix route lpm block size */
+t_std_error nas_sw_profile_ipv6_ext_prefix_route_lpm_blk_size_get(uint32_t *ipv6_ext_prefix_route_blk_size)
+{
+    if (nas_sw_profile_is_ipv6_ext_prefix_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","To Support IPv6 Extended prefix routes,"
+                   "config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (ipv6_ext_prefix_route_blk_size == NULL) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+    *ipv6_ext_prefix_route_blk_size = nas_switch_info.ipv6_ext_prefix_route_blk_size;
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_conf_ipv6_ext_prefix_routes_get - will get configured ipv6
+ * extended prefix routes size */
+t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_get(uint32_t *conf_ipv6_ext_prefix_routes)
+{
+    if (conf_ipv6_ext_prefix_routes == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+
+    if (nas_sw_profile_is_ipv6_ext_prefix_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","To Support IPv6 Extended prefix routes,"
+                   "config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    /* If no object in DB or corrupted data, return default */
+    *conf_ipv6_ext_prefix_routes = nas_switch_info.def_ipv6_ext_prefix_routes;
+
+    cps_api_object_list_guard obj_list(nas_sw_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","No object in startup DB");
+    }
+    else
+    {
+        //Currently handled for only one switch id, get the first object
+        cps_api_object_t obj = cps_api_object_list_get(list,0);
+        if(obj != nullptr)
+        {
+            uint32_t *next_ipv6_ext_prefix_routes =
+                (uint32_t *)cps_api_object_get_data(obj,
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_IPV6_EXTENDED_PREFIX_ROUTES);
+            if(next_ipv6_ext_prefix_routes != NULL)
+                *conf_ipv6_ext_prefix_routes = *next_ipv6_ext_prefix_routes;
+
+        }
+    }
+    return STD_ERR_OK;
+}
+
+/* ECMP related get/set and other API's*/
+t_std_error nas_sw_profile_validate_ipv6_ext_prefix_routes_size (uint32_t ipv6_ext_prefix_routes)
+{
+    if (ipv6_ext_prefix_routes > nas_switch_info.max_ipv6_ext_prefix_routes)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","IPv6 Extended prefix routes %d out of range",
+                   ipv6_ext_prefix_routes);
+        return STD_ERR(HALCOM,PARAM,e_std_err_code_PARAM);
+    }
+
+    if ((ipv6_ext_prefix_routes % nas_switch_info.ipv6_ext_prefix_route_blk_size) != 0)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","IPv6 Extended prefix routes "
+                  "value should be multiples of %d",
+                  nas_switch_info.ipv6_ext_prefix_route_blk_size);
+        return STD_ERR(HALCOM,PARAM,e_std_err_code_PARAM);
+    }
+
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","ipv6_ext_prefix_routes size %d",
+              ipv6_ext_prefix_routes);
+
+    return STD_ERR_OK;
+}
+
+
+/* nas_sw_profile_conf_ipv6_ext_prefix_routes_set - configures ipv6 ext prefix routes,
+   which will take effect on next boot, if its saved   */
+t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_set(uint32_t conf_ipv6_ext_prefix_routes,
+                                        cps_api_operation_types_t op_type)
+{
+    t_std_error rc = STD_ERR_OK;
+
+    if (nas_sw_profile_is_ipv6_ext_prefix_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","To Support IPv6 Extended prefix routes,"
+                   "config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (op_type == cps_api_oper_DELETE)
+    {
+        /* Set next boot with default value on delete */
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","Delete conf ipv6 ext prefix routes, set to default");
+        nas_switch_info.next_ipv6_ext_prefix_routes = nas_switch_info.def_ipv6_ext_prefix_routes;
+        return STD_ERR_OK;
+    }
+
+    EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","IPv6 Ext Prefix routes size %d",
+               conf_ipv6_ext_prefix_routes);
+
+    rc = nas_sw_profile_validate_ipv6_ext_prefix_routes_size(conf_ipv6_ext_prefix_routes);
+    if (rc != STD_ERR_OK) {
+        return rc;
+    }
+
+    nas_switch_info.next_ipv6_ext_prefix_routes =  conf_ipv6_ext_prefix_routes;
     return STD_ERR_OK;
 }
 
