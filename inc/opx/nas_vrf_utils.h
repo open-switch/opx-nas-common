@@ -26,6 +26,12 @@
 #include "nas_types.h"
 
 #ifdef __cplusplus
+extern "C++" {
+#include <vector>
+}
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -70,6 +76,14 @@ t_std_error nas_get_vrf_obj_id_from_vrf_name(const char *vrf_name, nas_obj_id_t 
 t_std_error nas_get_vrf_internal_id_from_vrf_name(const char *vrf_name, hal_vrf_id_t *vrf_id);
 
 /*!
+ *  Function to get the VRF ctrl block from a given VRF name.
+ *  \param vrf_name [in] Vrf_name
+ *  \param vrf_ctrl_blk [out] returns the VRF ctrl block
+ *  \return              std_error
+ */
+t_std_error nas_get_vrf_ctrl_from_vrf_name(const char *vrf_name, nas_vrf_ctrl_t *vrf_ctrl_blk);
+
+/*!
  *  Function to add/del the VRF information for the VRF name.
  *  \param op [in] VRF add/del operation.
  *  vrf_info must carry vrf_name in order to get the VRF info.
@@ -79,6 +93,17 @@ t_std_error nas_get_vrf_internal_id_from_vrf_name(const char *vrf_name, hal_vrf_
 t_std_error nas_update_vrf_info (nas_vrf_op_t op, nas_vrf_ctrl_t *vrf_info);
 
 #ifdef __cplusplus
+}
+#endif
+
+#ifdef __cplusplus
+extern "C++" {
+/*!
+ *  Function to return all vrf ctrl block
+ *  \param op [in] vector to hold pointers to vrf ctrl block
+ *  \return              none
+ */
+void nas_get_all_vrf_ctrl(std::vector<nas_vrf_ctrl_t> &v);
 }
 #endif
 

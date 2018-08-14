@@ -47,7 +47,7 @@ static auto vrf_map = new std::unordered_map<const char *,nas_vrf_ctrl_t *, _vrf
 
 static std_rw_lock_t rw_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-static inline void print_record(nas_vrf_ctrl_t*p) {
+static inline void print_record(const nas_vrf_ctrl_t *p) {
     EV_LOGGING(NAS_VRF,ERR,"VRF-INFO","VRF:%s vrf_id:0x%lx",
                p->vrf_name,p->vrf_id);
 }
@@ -161,16 +161,36 @@ t_std_error nas_get_vrf_internal_id_from_vrf_name(const char *vrf_name, hal_vrf_
                vrf_name, _p->vrf_int_id);
     return STD_ERR_OK;
 }
+
+t_std_error nas_get_vrf_ctrl_from_vrf_name(const char *vrf_name, nas_vrf_ctrl_t *vrf_ctrl_blk) {
+    STD_ASSERT(vrf_name != NULL);
+    std_rw_lock_read_guard l(&rw_lock);
+    nas_vrf_ctrl_t *tmp = _locate(vrf_name);
+    if (tmp == nullptr) {
+        return STD_ERR(COM, PARAM, 0);
+    }
+    *vrf_ctrl_blk = *tmp;
+    return STD_ERR_OK;
+}
 }
 
-void dump_tree_vrf() {
+void nas_get_all_vrf_ctrl(std::vector<nas_vrf_ctrl_t> &v) {
     std_rw_lock_read_guard l(&rw_lock);
     auto it = vrf_map->begin();
     auto end = vrf_map->end();
 
     for ( ; it != end ; ++it ) {
-        print_record(it->second);
+        v.push_back(*(it->second));
     }
 }
 
+void dump_tree_vrf() {
+    std_rw_lock_read_guard l(&rw_lock);
+    auto it = vrf_map->cbegin();
+    auto end = vrf_map->cend();
+
+    for ( ; it != end ; ++it ) {
+        print_record(it->second);
+    }
+}
 
