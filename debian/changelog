@@ -1,3 +1,14 @@
+opx-nas-common (7.3.0) unstable; urgency=medium
+
+  * Feature: Static L2 VxLAN Support
+  * Update: Add IPv6 Extended prefix handler code
+  * Update: Remove unnecessary logs
+  * Update: Add IETF to Linux type conversion
+  * Update: Support for ACL profile configuration and retrieval of ACL
+            application group information
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 06 Nov 2018 17:17:56 -0800
+
 opx-nas-common (7.1.0+opx3) unstable; urgency=medium
 
   * Update: VRF-get-handler support
@@ -27,7 +38,7 @@ opx-nas-common (7.1.0) unstable; urgency=medium
  -- Dell EMC <ops-dev@lists.openswitch.net>  Tue, 22 May 2018 17:17:56 -0800
 
 opx-nas-common (6.1.0+opx5) unstable; urgency=medium
-  
+
   * Update: Enable compiler/linker hardening flags
 
  -- Dell EMC <ops-dev@lists.openswitch.net>  Thu, 26 Apr 2018 17:17:56 -0800

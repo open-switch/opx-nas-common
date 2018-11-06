@@ -154,6 +154,10 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         nas_switch_update_ipv6_extended_prefix_info (node);
     }
 
+    if (strncmp(name,"switch_acl_profile", strlen(name))==0) {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch ACL profile info");
+        nas_switch_update_acl_profile_info (node);
+    }
 }
 
 t_std_error nas_switch_init(void) {

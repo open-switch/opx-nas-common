@@ -33,6 +33,7 @@
 #include "cps_api_db_interface.h"
 #include "cps_api_object_tools.h"
 #include "dell-base-switch-element.h"
+#include "dell-base-acl.h"
 #include "nas_sw_profile_api.h"
 #include "nas_sw_profile.h"
 #include "std_utils.h"
@@ -317,6 +318,131 @@ t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node)
     return STD_ERR_OK;
 }
 
+/* parse switch.xml file and update ACL profile info */
+t_std_error nas_switch_update_acl_profile_info (std_config_node_t node)
+{
+    char     stage[NAS_CMN_NPU_PROFILE_ATTR_SIZE] = { 0 };
+    uint32_t stage_type = 0;
+    uint32_t max_pool_count = 0;
+    uint32_t total_pool_count = 0;
+    uint32_t app_group_idx = 0;
+    uint32_t default_pool_count = 0;
+    uint32_t depth_per_pool = 0;
+    uint32_t num_app = 0;
+    uint32_t app_idx = 0;
+
+    std_config_node_t chld_node;
+    std_config_node_t app_group_info_node;
+    std_config_node_t app_info_node;
+
+    for (chld_node = std_config_get_child(node);
+         chld_node != NULL;
+         chld_node = std_config_next_node(chld_node)) {
+
+        nas_std_cfg_str_attr_update(chld_node, "type", stage);
+        nas_std_cfg_attr_update(chld_node, "max_pool_avail", &max_pool_count);
+
+        /* update the stage specific information based on the type string */
+        if (strcmp ("ingress", stage) == 0)
+            nas_switch_info.acl_profile_max_ingress_pool_count = max_pool_count;
+        else if (strcmp ("egress", stage) == 0)
+            nas_switch_info.acl_profile_max_egress_pool_count = max_pool_count;
+        total_pool_count += max_pool_count;
+    }
+
+    nas_switch_info.acl_profile_app_group_info = (nas_cmn_acl_profile_app_group_info_t *)
+                        calloc(total_pool_count, sizeof(nas_cmn_acl_profile_app_group_info_t));
+
+    if(nas_switch_info.acl_profile_app_group_info == NULL){
+        nas_switch_info.acl_profile_max_ingress_pool_count = 0;
+        nas_switch_info.acl_profile_max_egress_pool_count = 0;
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Failed to allocate memory for ACL profile info");
+        return STD_ERR(HALCOM, PARAM,2);
+    }
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+               "total pool count:%d, ingress_pool:%d, egress_pool:%d",
+               total_pool_count,
+               nas_switch_info.acl_profile_max_ingress_pool_count,
+               nas_switch_info.acl_profile_max_egress_pool_count);
+
+    for (chld_node = std_config_get_child(node);
+         chld_node != NULL;
+         chld_node = std_config_next_node(chld_node)) {
+
+        nas_std_cfg_str_attr_update(chld_node, "type", stage);
+
+        if (strcmp ("ingress", stage) == 0)
+            stage_type = BASE_ACL_STAGE_INGRESS;
+        else if (strcmp ("egress", stage) == 0)
+            stage_type = BASE_ACL_STAGE_EGRESS;
+
+        for (app_group_info_node = std_config_get_child(chld_node);
+             app_group_info_node != NULL;
+             app_group_info_node = std_config_next_node(app_group_info_node), app_group_idx++) {
+
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].stage_type = stage_type;
+            nas_std_cfg_str_attr_update(app_group_info_node, "name",
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].app_group_name);
+
+            nas_std_cfg_attr_update(app_group_info_node, "default_pool_count",
+                    &default_pool_count);
+
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].default_pool_count = default_pool_count;
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].current_pool_count = default_pool_count;
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].next_boot_pool_count = default_pool_count;
+
+            nas_std_cfg_attr_update(app_group_info_node, "depth_per_pool", &depth_per_pool);
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].depth_per_pool = depth_per_pool;
+
+            num_app = nas_std_child_node_count_get(app_group_info_node);
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].num_app = num_app;
+
+            if(num_app == 0){
+                EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","ACL profile app group app info is incomplete");
+                return STD_ERR(HALCOM, PARAM,2);
+            }
+
+            nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info  = (nas_cmn_acl_profile_app_info_t *)
+                calloc(num_app, sizeof(nas_cmn_acl_profile_app_info_t));
+
+            if(nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info == NULL) {
+                EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Failed to allocate memory for ACL profile app info");
+                return STD_ERR(HALCOM, PARAM,2);
+            }
+
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "Pool:%s, default_pool_count:%d, depth_per_pool:%d, num_app:%d",
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].app_group_name,
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].default_pool_count,
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].depth_per_pool,
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].num_app);
+
+            for (app_info_node = std_config_get_child(app_group_info_node), app_idx = 0;
+                 app_info_node != NULL;
+                 app_info_node = std_config_next_node(app_info_node), app_idx++) {
+
+                nas_std_cfg_str_attr_update(app_info_node, "app",
+                    nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info[app_idx].app_name);
+
+                nas_std_cfg_attr_update(app_info_node, "num_units_per_entry",
+                    &nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info[app_idx].num_units_per_entry);
+
+                EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                        "App:%s, num_units_per_entry:%d",
+                        nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info[app_idx].app_name,
+                        nas_switch_info.acl_profile_app_group_info[app_group_idx].app_info[app_idx].num_units_per_entry);
+            }
+        }
+    }
+
+    nas_switch_info.acl_profile_valid = true;
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH", "switch ACL profile read success");
+
+    return STD_ERR_OK;
+}
+
 /* switch profile API's can be used by
     -CPS get/set from nas-l2 and
     -from nas-ndi to read init parametrs
@@ -351,6 +477,36 @@ cps_api_object_list_t nas_sw_profile_startup_cps_db_get()
     cps_api_object_list_destroy(obj_list, true);
     return nullptr;
 }
+
+/* nas_sw_acl_profile_startup_cps_db_get - will get the ACL profile object
+   stored in the CPS DB with startup qualifier */
+cps_api_object_list_t nas_sw_acl_profile_startup_cps_db_get()
+{
+    cps_api_object_list_t obj_list = cps_api_object_list_create();
+    cps_api_object_guard og(cps_api_obj_tool_create(cps_api_qualifier_STARTUP_CONFIG,
+        BASE_ACL_SWITCHING_ENTITY_APP_GROUP,false));
+
+    if(obj_list==nullptr || og.get()==nullptr)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "Creating list or object for SW ACL profile entity failed");
+        if(obj_list != nullptr)
+        {
+            cps_api_object_list_destroy(obj_list, true);
+        }
+        return nullptr;
+    }
+
+    if(cps_api_db_get(og.get(),obj_list)==cps_api_ret_code_OK)
+    {
+        return obj_list;
+    }
+    EV_LOGGING(NAS_COM, INFO , "NAS-CMN-SWITCH",
+               "No SW ACL profile data in startup DB");
+    cps_api_object_list_destroy(obj_list, true);
+    return nullptr;
+}
+
 
 /* nas_sw_profile_current_profile_get - will get the currently
    active switch profile */
@@ -509,7 +665,7 @@ t_std_error nas_sw_profile_conf_profile_set(uint32_t sw_id, char *conf_profile,
             sizeof(nas_switch_info.next_boot_profile.name));
     return STD_ERR_OK;
 }
-/* General API to retun number profile supported, this is based on
+/* General API to return number profile supported, this is based on
    number of profiles mentioned in the switch.xml file */
 t_std_error nas_sw_profile_num_profiles_get(uint32_t sw_id,
                                             uint32_t *num_profiles)
@@ -670,7 +826,7 @@ t_std_error nas_sw_profile_uft_info_get(uint32_t uft_mode,
 
     return STD_ERR_OK;
 }
-/* nas_sw_profile_uft_num_modes_get - will retun the number of
+/* nas_sw_profile_uft_num_modes_get - will return the number of
    UFT modes supported */
 t_std_error nas_sw_profile_uft_num_modes_get(uint32_t *num_uft_modes)
 {
@@ -687,7 +843,7 @@ t_std_error nas_sw_profile_uft_num_modes_get(uint32_t *num_uft_modes)
     *num_uft_modes = nas_switch_info.num_uft_modes;
     return STD_ERR_OK;
 }
-/* nas_sw_profile_uft_default_mode_info_get - will retun the default
+/* nas_sw_profile_uft_default_mode_info_get - will return the default
    UFT mode and corresponding table size values */
 t_std_error nas_sw_profile_uft_default_mode_info_get(uint32_t *def_uft_mode,
                                                      uint32_t *l2_size,
@@ -796,8 +952,649 @@ t_std_error nas_sw_profile_conf_max_ecmp_per_grp_set(uint32_t conf_max_ecmp_per_
     return STD_ERR_OK;
 }
 
-/****** CPS DB  Get, Set *******/
+/*** ACL profile/app-group info related get/set API's ***/
 
+/* nas_sw_acl_profile_db_config_supported - verifies that
+ * ACL profile DB configuration for the given app group is supported.
+ * returns true if supported, else 0.
+ */
+static bool nas_sw_acl_profile_db_config_supported (const char *app_group_name)
+{
+    uint32_t app_grp_idx;
+    uint32_t num_pools = 0;
+
+    if (!nas_switch_info.acl_profile_valid)
+    {
+        EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","ACL profile DB not configurable");
+        return false;
+    }
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        if ((app_group_name == NULL) ||
+            (strcmp(app_group_name, nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name) == 0))
+        {
+            switch (nas_switch_info.acl_profile_app_group_info[app_grp_idx].stage_type)
+            {
+                case BASE_ACL_STAGE_INGRESS:
+                    num_pools = nas_switch_info.acl_profile_max_ingress_pool_count;
+                    break;
+                case BASE_ACL_STAGE_EGRESS:
+                    num_pools = nas_switch_info.acl_profile_max_egress_pool_count;
+                    break;
+                default:
+                    break;
+            }
+            /* ACL profile DB config not supported when number of pools for that app-group is not more than 1 */
+            if (num_pools <= 1)
+                break;
+
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "ACL profile %s DB config supported",
+                    ((app_group_name != NULL)?app_group_name:""));
+            return true;
+        }
+    }
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+               "ACL profile %s DB config not supported",
+               ((app_group_name != NULL)?app_group_name:""));
+    return false;
+}
+
+
+/* retrieves the ACL profile app group info from startup DB.
+ */
+static t_std_error nas_sw_acl_profile_startup_db_info_get (const char *app_group_name, uint32_t *p_conf_pool_count)
+{
+    uint32_t      acl_profile_sw_id = 0;
+    uint32_t      next_boot_pool_count = 0;
+    const char   *p_app_group = NULL;
+    size_t        len;
+    size_t        ix = 0;
+    bool          app_group_id_found = false;
+    bool          next_boot_pool_count_found = false;
+
+    cps_api_object_list_guard obj_list(nas_sw_acl_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","No object in startup DB");
+        return STD_ERR (HALCOM,PARAM,2);
+    }
+
+    len = cps_api_object_list_size(list);
+
+    for (ix=0; ix < len; ++ix)
+    {
+        cps_api_object_t cps_obj = cps_api_object_list_get(list, ix);
+        cps_api_object_it_t it;
+        cps_api_object_it_begin(cps_obj,&it);
+
+        app_group_id_found = false;
+        next_boot_pool_count_found = false;
+
+        for ( ; cps_api_object_it_valid(&it) ; cps_api_object_it_next(&it))
+        {
+            switch(cps_api_object_attr_id(it.attr))
+            {
+                case BASE_ACL_SWITCHING_ENTITY_SWITCH_ID:
+                    acl_profile_sw_id = cps_api_object_attr_data_u32(it.attr);
+                    break;
+                case BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID:
+                    p_app_group = (const char *)cps_api_object_attr_data_bin(it.attr);
+                    if (strncmp(app_group_name, p_app_group, cps_api_object_attr_len(it.attr)) == 0)
+                    {
+                        app_group_id_found = true;
+                    }
+                    break;
+                case BASE_ACL_SWITCHING_ENTITY_APP_GROUP_POOL_COUNT:
+                    next_boot_pool_count = cps_api_object_attr_data_u32(it.attr);
+                    next_boot_pool_count_found = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+
+        if (app_group_id_found && next_boot_pool_count_found)
+        {
+            *p_conf_pool_count = next_boot_pool_count;
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","switch ACL profile app-group info from DB"
+                       "sw_id:%d, app-group:%s, next_boot_pool_count:%d",
+                       acl_profile_sw_id, p_app_group, next_boot_pool_count);
+            return STD_ERR_OK;
+        }
+    }
+    EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Failed switch ACL profile app-group info get from DB"
+            "app-group:%s", app_group_name);
+
+    return STD_ERR (HALCOM,PARAM,2);
+
+}
+
+/* retrieves the ACL profile app group info from DB.
+ * if qualifier is observed, it returns from running DB,
+ * if qualifier is target, it returns from startup DB.
+ */
+static cps_api_object_t nas_sw_acl_profile_app_group_info_to_obj (uint32_t app_grp_idx, cps_api_qualifier_t qualifier)
+{
+    uint32_t conf_pool_count = 0;
+    uint32_t app_idx = 0;
+    uint32_t default_pool_count;
+    uint32_t depth_per_pool;
+    uint32_t stage_type;
+    uint32_t current_pool_count;
+
+    cps_api_attr_id_t ids[3] = {BASE_ACL_SWITCHING_ENTITY_APP_GROUP_APPLICATION, 0,
+        BASE_ACL_SWITCHING_ENTITY_APP_GROUP_APPLICATION_APP_ID};
+    const int ids_len = sizeof(ids)/sizeof(ids[0]);
+
+    if (app_grp_idx >= (nas_switch_info.acl_profile_max_ingress_pool_count + nas_switch_info.acl_profile_max_egress_pool_count)) {
+        return NULL;
+    }
+
+    cps_api_object_t obj = cps_api_object_create();
+
+    if (!obj) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "Obj create failed for ACL profile app group info get");
+        return NULL;
+    }
+
+    if (!cps_api_key_from_attr_with_qual (cps_api_object_key (obj),
+                BASE_ACL_SWITCHING_ENTITY_APP_GROUP, qualifier)) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "Failed to create Key from Switching entity Object");
+
+        return NULL;
+    }
+
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_SWITCH_ID,
+            NAS_CMN_DEFAULT_SWITCH_ID);
+
+    cps_api_object_attr_add(obj, BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID,
+            nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+            strlen (nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name)+1);
+
+    default_pool_count = nas_switch_info.acl_profile_app_group_info[app_grp_idx].default_pool_count;
+    depth_per_pool = nas_switch_info.acl_profile_app_group_info[app_grp_idx].depth_per_pool;
+    stage_type = nas_switch_info.acl_profile_app_group_info[app_grp_idx].stage_type;
+    /* get info from startup DB, if no DB, then return current pool count */
+    current_pool_count = nas_switch_info.acl_profile_app_group_info[app_grp_idx].current_pool_count;
+
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_APP_GROUP_STAGE, stage_type);
+
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_APP_GROUP_DEPTH, depth_per_pool);
+
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_APP_GROUP_DEFAULT_POOL_COUNT, default_pool_count);
+
+    if (qualifier == cps_api_qualifier_TARGET) {
+
+        if (nas_sw_acl_profile_startup_db_info_get
+                (nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                 &conf_pool_count) == STD_ERR_OK)
+        {
+            current_pool_count = conf_pool_count;
+        }
+
+        cps_api_object_attr_add_u32(obj,
+                BASE_ACL_SWITCHING_ENTITY_APP_GROUP_POOL_COUNT,
+                current_pool_count);
+
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "switch ACL profile DB get for app group:%s, next boot pool_count:%d",
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                current_pool_count);
+    } else if (qualifier == cps_api_qualifier_OBSERVED) {
+        cps_api_object_attr_add_u32(obj,
+                BASE_ACL_SWITCHING_ENTITY_APP_GROUP_POOL_COUNT, current_pool_count);
+
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "switch ACL profile DB get for app group:%s, current pool_count:%d",
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                current_pool_count);
+    }
+
+    for (app_idx = 0; app_idx < nas_switch_info.acl_profile_app_group_info[app_grp_idx].num_app; app_idx++) {
+        ids[1] = app_idx;
+        ids[2] = BASE_ACL_SWITCHING_ENTITY_APP_GROUP_APPLICATION_APP_ID;
+        cps_api_object_e_add(obj,ids,ids_len,cps_api_object_ATTR_T_BIN,
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_info[app_idx].app_name,
+                strlen (nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_info[app_idx].app_name)+1);
+
+        ids[1] = app_idx;
+        ids[2] = BASE_ACL_SWITCHING_ENTITY_APP_GROUP_APPLICATION_NUM_UNITS_PER_ENTRY;
+        cps_api_object_e_add(obj,ids,ids_len,cps_api_object_ATTR_T_U32,
+                &nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_info[app_idx].num_units_per_entry,
+                sizeof(uint32_t));
+    }
+
+    return obj;
+}
+
+
+/* update switch ACL profile cache */
+static t_std_error nas_switch_acl_profile_update_cache (const char *app_group_name,
+                            uint32_t next_boot_pool_count, bool update_current_count)
+{
+    uint32_t app_grp_idx;
+
+    if (app_group_name == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "Invalid app_group_name for ACL profile DB config ");
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    if (!nas_switch_info.acl_profile_valid)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "ACL profile DB config for %s not supported",
+                app_group_name);
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        if (strcmp(app_group_name, nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name) == 0)
+        {
+            nas_switch_info.acl_profile_app_group_info[app_grp_idx].next_boot_pool_count = next_boot_pool_count;
+
+            if (update_current_count)
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].current_pool_count = next_boot_pool_count;
+
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "switch ACL profile update for app group:%s, next_boot_pool_count:%d",
+                    app_group_name, next_boot_pool_count);
+
+            return STD_ERR_OK;
+        }
+    }
+    return STD_ERR(HALCOM,PARAM,2);
+}
+
+/* reset switch ACL profile app group info next boot pool count to default value */
+static t_std_error nas_switch_acl_profile_reset_cache_to_default (const char *app_group_name)
+{
+    uint32_t app_grp_idx;
+
+    if (app_group_name == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                "Invalid app_group_name for ACL profile DB config ");
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        if (strcmp(app_group_name, nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name) == 0)
+        {
+            nas_switch_info.acl_profile_app_group_info[app_grp_idx].next_boot_pool_count =
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].default_pool_count;
+
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "switch ACL profile reset to default pool count for app group:%s",
+                    app_group_name);
+
+            return STD_ERR_OK;
+        }
+    }
+
+    return STD_ERR(HALCOM,PARAM,2);
+}
+
+
+/* General API to return number of switch ACL profile pool's supported, this is based on
+   number of pools mentioned in the switch.xml file */
+t_std_error nas_sw_acl_profile_num_db_get(uint32_t *num_acl_db)
+{
+    if (num_acl_db == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "Invalid input for ACL profile info get");
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    *num_acl_db = 0;
+    if (!nas_switch_info.acl_profile_valid)
+    {
+        EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                "No information on Switch ACL profile in DB");
+        return STD_ERR_OK;
+    }
+
+    *num_acl_db = nas_switch_info.acl_profile_max_ingress_pool_count +
+                  nas_switch_info.acl_profile_max_egress_pool_count;
+
+    return STD_ERR_OK;
+}
+
+
+/* General API to return the switch ACL profile app group info */
+t_std_error nas_sw_acl_profile_db_get_next(const char *app_group_name,
+                                           char *app_group_name_next, uint32_t *num_pools_req)
+{
+    uint32_t app_grp_idx;
+
+    if (app_group_name_next == NULL || num_pools_req == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "Invalid input for ACL profile DB get");
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        if ((app_group_name == NULL) ||
+            (strcmp (app_group_name, nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name) == 0))
+        {
+            if (app_group_name != NULL)
+            {
+                app_grp_idx++;
+                if (app_grp_idx >= (nas_switch_info.acl_profile_max_ingress_pool_count + nas_switch_info.acl_profile_max_egress_pool_count))
+                {
+                    /* no more entries */
+                    return STD_ERR(HALCOM,PARAM,2);
+                }
+            }
+            safestrncpy (app_group_name_next,
+                    nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                    NAS_CMN_PROFILE_NAME_SIZE);
+            *num_pools_req = nas_switch_info.acl_profile_app_group_info[app_grp_idx].current_pool_count;
+            return STD_ERR_OK;
+        }
+    }
+
+    /* no more entries */
+    return STD_ERR(HALCOM,PARAM,2);
+}
+
+
+/* nas_sw_acl_profile_info_get -
+   this API will return the switch ACL profile information in object format.
+ */
+t_std_error nas_sw_acl_profile_info_get (cps_api_object_t obj)
+{
+    int app_grp_idx;
+
+    if (nas_sw_acl_profile_db_config_supported (NULL) == false)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","switch ACL profile not supported");
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    cps_api_attr_id_t ids[3] = {BASE_ACL_SWITCHING_ENTITY_APP_GROUP, 0,
+        BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID};
+    const int ids_len = sizeof(ids)/sizeof(ids[0]);
+
+    uint32_t acl_profile_max_ingress_pool_count = nas_switch_info.acl_profile_max_ingress_pool_count;
+    uint32_t acl_profile_max_egress_pool_count = nas_switch_info.acl_profile_max_egress_pool_count;
+
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_MAX_INGRESS_ACL_POOL_COUNT,
+            acl_profile_max_ingress_pool_count);
+    cps_api_object_attr_add_u32(obj,
+            BASE_ACL_SWITCHING_ENTITY_MAX_EGRESS_ACL_POOL_COUNT,
+            acl_profile_max_egress_pool_count);
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        ids[1] = app_grp_idx;
+        ids[2] = BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID;
+        cps_api_object_e_add(obj,ids,ids_len,cps_api_object_ATTR_T_BIN,
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                strlen (nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name)+1);
+    }
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+            "switch ACL profile info get success ");
+    return STD_ERR_OK;
+}
+
+/* nas_sw_acl_profile_app_group_info_get -
+ * this API will return the ACL profile app group information.
+ * if is_get_all is true, then it returns all app group info.
+ * else, it returns the app group info for the given app group id.
+ * if qualifier is observed,
+ *     it returns the current pool count assigned for the app-group.
+ * if qualifier is target,
+ *     it returns the last saved next boot pool count assigned for the app-group.
+ */
+t_std_error nas_sw_acl_profile_app_group_info_get (const char *app_group_name, bool is_get_all,
+                                                   cps_api_object_list_t list, cps_api_qualifier_t qualifier)
+{
+    uint32_t app_grp_idx;
+
+    if ((is_get_all == false) && (app_group_name == NULL))
+        return STD_ERR(HALCOM,PARAM,2);
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++) {
+
+        if ((is_get_all) ||
+            (strcmp(app_group_name, nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name) == 0))
+        {
+            cps_api_object_list_t obj = nas_sw_acl_profile_app_group_info_to_obj (app_grp_idx, qualifier);
+
+            if ((obj != NULL) &&
+                (!cps_api_object_list_append(list, obj)))
+            {
+                cps_api_object_delete(obj);
+
+                EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                        "switch ACL profile get failed during list append for app group:%s",
+                        nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name);
+                return STD_ERR(HALCOM,PARAM,2);
+            }
+
+            EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH",
+                    "switch ACL profile get for app group:%s success",
+                    nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name);
+            if (!is_get_all)
+                return STD_ERR_OK;
+        }
+    }
+
+    return STD_ERR_OK;
+}
+
+/* nas_sw_acl_profile_app_group_info_set - configures ACL DB info,
+ * configures ACL profile app group info which will take effect on next boot, if saved.
+ */
+t_std_error nas_sw_acl_profile_app_group_info_set (const char *app_group_name, uint32_t next_boot_pool_req,
+                                                   cps_api_operation_types_t op_type)
+{
+    if (nas_sw_acl_profile_db_config_supported (app_group_name) == false)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH",
+                   "ACL profile DB config for %s not supported",
+                   app_group_name);
+        return STD_ERR(HALCOM,PARAM,2);
+    }
+
+    if (op_type == cps_api_oper_DELETE)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH",
+                   "Delete ACL profile DB conf for %s, set to default",
+                   app_group_name);
+        return (nas_switch_acl_profile_reset_cache_to_default(app_group_name));
+    }
+    return (nas_switch_acl_profile_update_cache (app_group_name, next_boot_pool_req, false));
+}
+
+
+/****** CPS DB  Get, Set for Switching ACL profile entity *******/
+
+/* updates sw ACL profile info to running config */
+t_std_error nas_switch_upd_acl_profile_info_to_running_cps_db (uint32_t sw_id)
+{
+    uint32_t app_grp_idx;
+    uint32_t next_boot_pool_count;
+    t_std_error rc = STD_ERR_OK;
+    char     buff[1024];
+
+    for (app_grp_idx = 0;
+         app_grp_idx < (nas_switch_info.acl_profile_max_ingress_pool_count +
+                        nas_switch_info.acl_profile_max_egress_pool_count);
+         app_grp_idx++)
+    {
+        /* In some cases there will be stale values in DB with RUNNING qualifier,
+         * so overrite them by writing the complete DB.
+         */
+        cps_api_object_t db_obj = cps_api_object_init(buff, sizeof(buff));
+
+        cps_api_key_from_attr_with_qual(cps_api_object_key(db_obj),
+                BASE_ACL_SWITCHING_ENTITY_APP_GROUP,
+                cps_api_qualifier_RUNNING_CONFIG);
+
+        cps_api_object_set_type_operation(cps_api_object_key(db_obj),cps_api_oper_SET);
+
+        /* after updating local, update CPS DB for these objects with RUNNING qualifiers.
+           in some scenarions where startup and running wil be different, if startup.xml gets
+           deleted. So after reading from DB(in both cases if Obj present in DB or not) update
+           current value to DB as RUNNING */
+
+        cps_api_object_attr_add_u32 (db_obj, BASE_ACL_SWITCHING_ENTITY_SWITCH_ID, sw_id);
+
+        cps_api_object_attr_add (db_obj, BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID,
+                nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name,
+                strlen (nas_switch_info.acl_profile_app_group_info[app_grp_idx].app_group_name)+1);
+
+        next_boot_pool_count = nas_switch_info.acl_profile_app_group_info[app_grp_idx].next_boot_pool_count;
+
+        cps_api_object_attr_add_u32(db_obj,BASE_ACL_SWITCHING_ENTITY_APP_GROUP_POOL_COUNT, next_boot_pool_count);
+
+        cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
+
+        if (ret != cps_api_ret_code_OK)
+        {
+            EV_LOGGING(NAS_L2, ERR, "SWITCH",
+                    "Failed to clear switch ACL profile elements from DB");
+            rc = STD_ERR(HALCOM,FAIL,2);
+            break;
+        }
+    }
+
+    return rc;
+}
+
+/* parse switch ACL profile info from startup DB and update running config */
+t_std_error nas_sw_acl_profile_parse_db_and_update(uint32_t sw_id)
+{
+    uint32_t      acl_profile_sw_id = 0;
+    uint32_t      next_boot_pool_count = 0;
+    const char   *app_group_name = NULL;
+    size_t        len = 0;
+    size_t        ix = 0;
+    bool          acl_profile_found = false;
+    bool          app_group_id_found = false;
+    bool          next_boot_pool_count_found = false;
+
+    cps_api_object_list_t list;
+
+    if (!nas_switch_info.acl_profile_valid)
+    {
+        EV_LOGGING(NAS_COM, DEBUG, "SWITCH-INIT",
+                "No information on Switch ACL profile in DB");
+        return STD_ERR_OK;
+    }
+    list = nas_sw_acl_profile_startup_cps_db_get();
+
+    if (list != nullptr)
+    {
+        len = cps_api_object_list_size(list);
+        acl_profile_found = true;
+    }
+
+    /* parse and update local database */
+    for (ix=0; ix < len; ++ix)
+    {
+        cps_api_object_t cps_obj = cps_api_object_list_get(list, ix);
+        cps_api_object_it_t it;
+        cps_api_object_it_begin(cps_obj,&it);
+
+        for ( ; cps_api_object_it_valid(&it) ; cps_api_object_it_next(&it))
+        {
+            switch(cps_api_object_attr_id(it.attr))
+            {
+                case BASE_ACL_SWITCHING_ENTITY_SWITCH_ID:
+                    acl_profile_sw_id = cps_api_object_attr_data_u32(it.attr);
+                    if (acl_profile_sw_id != sw_id)
+                    {
+                        EV_LOGGING(NAS_COM, ERR, "SWITCH-INIT",
+                                   "Mismatch. switch ACL profile DB APP group sw_id(%d) is not same as input sw_id(%d)",
+                                   acl_profile_sw_id, sw_id);
+                    }
+                break;
+                case BASE_ACL_SWITCHING_ENTITY_APP_GROUP_ID:
+                    app_group_name = (const char *)cps_api_object_attr_data_bin(it.attr);
+                    app_group_id_found = true;
+                    break;
+                case BASE_ACL_SWITCHING_ENTITY_APP_GROUP_POOL_COUNT:
+                    next_boot_pool_count = cps_api_object_attr_data_u32(it.attr);
+                    next_boot_pool_count_found = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (!app_group_id_found || !next_boot_pool_count_found)
+        {
+            EV_LOGGING(NAS_COM, ERR, "SWITCH-INIT",
+                       "switch ACL profile info from DB is incomplete. "
+                       "Missing app group id or next boot pool count app_found:%d, pool_count_found:%d",
+                       app_group_id_found, next_boot_pool_count_found);
+        }
+        else
+        {
+            EV_LOGGING(NAS_COM, DEBUG, "SWITCH-INIT","switch ACL profile app-group info from DB"
+                       "sw_id:%d, app-group:%s, next_boot_pool_count:%d",
+                       acl_profile_sw_id, app_group_name, next_boot_pool_count);
+            nas_switch_acl_profile_update_cache (app_group_name, next_boot_pool_count, true);
+        }
+        app_group_id_found = false;
+        next_boot_pool_count_found = false;
+    }
+
+    if (list != nullptr)
+    {
+        cps_api_object_list_destroy(list, true);
+    }
+
+    if(acl_profile_found == false)
+    {
+        EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT",
+                   "switch ACL profile info not present in startup DB,"
+                   "set default ACL profile info");
+    }
+    nas_switch_upd_acl_profile_info_to_running_cps_db (sw_id);
+
+    return STD_ERR_OK;
+}
+
+/****** CPS DB  Get, Set for Switching entity *******/
 t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 {
     bool profile_found, uft_found, ecmp_found, ipv6_ext_prefix_found;
@@ -952,15 +1749,25 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
     cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
     if (ret != cps_api_ret_code_OK)
     {
-        EV_LOGGING(NAS_L2, ERR, "SWITCH","Failed to clear switch elements from DB");
+        EV_LOGGING(NAS_COM, ERR, "SWITCH","Failed to clear switch elements from DB");
         cps_api_object_delete(db_obj);
         return STD_ERR(HALCOM,FAIL,2);
     }
 
     cps_api_object_delete(db_obj);
 
+    /* parse sw ACL profile info from DB and update cache */
+    t_std_error rc = nas_sw_acl_profile_parse_db_and_update(sw_id);
+
+    if (rc != STD_ERR_OK)
+    {
+        EV_LOGGING(NAS_COM, ERR, "SWITCH","Failed to clear switch ACL profile elements from DB");
+        return STD_ERR(HALCOM,FAIL,2);
+    }
+
     return STD_ERR_OK;
 }
+
 
 /* nas_sw_profile_cur_ipv6_ext_prefix_routes_get - will get current confiured ipv6
     extended prefix routes */

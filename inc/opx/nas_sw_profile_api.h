@@ -269,6 +269,21 @@ t_std_error nas_sw_profile_max_ipv6_ext_prefix_routes_get(uint32_t *max_ipv6_ext
  */
 t_std_error nas_sw_profile_ipv6_ext_prefix_route_lpm_blk_size_get(uint32_t *ipv6_ext_prefix_route_blk_size);
 
+t_std_error nas_sw_acl_profile_num_db_get (uint32_t *num_acl_db);
+
+t_std_error nas_sw_acl_profile_db_get_next(const char *app_group_name,
+                                           char *app_group_name_next, uint32_t *num_pools_req);
+
+t_std_error nas_sw_acl_profile_info_get (cps_api_object_t obj);
+
+t_std_error nas_sw_acl_profile_app_group_info_get (const char *app_group_name, bool is_get_all,
+                                                   cps_api_object_list_t list, cps_api_qualifier_t qualifier);
+
+t_std_error nas_sw_acl_profile_app_group_info_set (const char *app_group_name, uint32_t next_boot_pool_req,
+                                                   cps_api_operation_types_t op_type);
+
+t_std_error nas_switch_upd_acl_profile_info_to_running_cps_db (uint32_t sw_id);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif
