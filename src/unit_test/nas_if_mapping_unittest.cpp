@@ -104,22 +104,22 @@ TEST(nas_if_mapping, limits) {
     size_t ix = 0;
     size_t mx = 1000;
     for ( ; ix < mx ; ++ix ) {
-        r.port_mapped = true;
-        r.npu_id = ix+1;
-        r.port_id = ix+2;
-        r.if_index = ix+3;
-        r.vrf_id = ix+4;
+        r.npu_id = 0;
+        r.port_id = ix+1;
+        r.if_index = ix+1;
+        r.vrf_id = 0;
+        r.q_type = HAL_INTF_INFO_FROM_IF_NAME;
         snprintf(r.if_name,sizeof(r.if_name),"cliff%d",(int)ix);
 
         ASSERT_TRUE(dn_hal_if_register(HAL_INTF_OP_REG,&r)==STD_ERR_OK);
     }
 
     ix = 0;
-    mx = 10000;
+    mx = 1000;
     for ( ; ix < mx ; ++ix ) {
         memset(&r,0,sizeof(r));
-        r.if_index = 100;
-        r.vrf_id = 101;
+        r.if_index = ix+1;
+        r.vrf_id = 0;
 
         r.q_type = HAL_INTF_INFO_FROM_IF;
         ASSERT_TRUE(dn_hal_get_interface_info(&r)==STD_ERR_OK);

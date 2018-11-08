@@ -22,6 +22,7 @@
  * hal_if_mapping.cpp
  */
 
+#include "dell-base-common.h"
 #include "hal_if_mapping.h"
 #include "iana-if-type.h"
 #include "dell-base-interface-common.h"
@@ -242,6 +243,7 @@ static std::map<nas_int_type_t, const char *> nas_to_ietf_if_types  =
     {nas_int_type_VLANSUB_INTF, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE},
 };
 
+
 static auto ietf_to_nas_types  = new std::unordered_map<std::string,nas_int_type_t>
 {
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU, nas_int_type_CPU},
@@ -255,7 +257,6 @@ static auto ietf_to_nas_types  = new std::unordered_map<std::string,nas_int_type
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN, nas_int_type_VXLAN},
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE, nas_int_type_VLANSUB_INTF},
 };
-
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t size)
 {
     auto it = nas_to_ietf_if_types.find(if_type);
@@ -271,6 +272,32 @@ bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type)
 {
     auto it = ietf_to_nas_types->find(std::string(ietf_type));
     if(it != ietf_to_nas_types->end()){
+        *if_type = it->second;
+        return true;
+    }
+
+    return false;
+}
+
+static auto ietf_to_nas_os_types  = new std::unordered_map<std::string,BASE_CMN_INTERFACE_TYPE_t>
+{
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_CPU, BASE_CMN_INTERFACE_TYPE_CPU},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_ETHERNETCSMACD, BASE_CMN_INTERFACE_TYPE_L3_PORT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_L2VLAN, BASE_CMN_INTERFACE_TYPE_VLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG, BASE_CMN_INTERFACE_TYPE_LAG},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_SOFTWARELOOPBACK, BASE_CMN_INTERFACE_TYPE_LOOPBACK},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_FIBRECHANNEL, BASE_CMN_INTERFACE_TYPE_L3_PORT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MACVLAN, BASE_CMN_INTERFACE_TYPE_MACVLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, BASE_CMN_INTERFACE_TYPE_MANAGEMENT},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN, BASE_CMN_INTERFACE_TYPE_VXLAN},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE, BASE_CMN_INTERFACE_TYPE_VLAN_SUBINTF},
+};
+
+//Conversion from ietf interface type to linux intf type
+bool ietf_to_nas_os_if_type_get(const char *ietf_type, BASE_CMN_INTERFACE_TYPE_t *if_type)
+{
+    auto it = ietf_to_nas_os_types->find(std::string(ietf_type));
+    if(it != ietf_to_nas_os_types->end()){
         *if_type = it->second;
         return true;
     }
@@ -375,6 +402,7 @@ t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac) {
     EV_LOGGING(INTERFACE,INFO,"NAS-IF-REG","OS update for MAC intf  %s MAC %s", _intf.if_name, mac);
     return(dn_hal_update_interface(&_intf));
 }
+
 /* Update router interface (non-default VRF context) for lower layer interface (default VRF context) */
 t_std_error nas_cmn_update_router_intf_info(hal_vrf_id_t vrf_id, hal_ifindex_t ifx,
                                             l3_intf_info_t *info) {

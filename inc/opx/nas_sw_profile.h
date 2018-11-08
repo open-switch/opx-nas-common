@@ -48,9 +48,37 @@ typedef struct {
 }nas_cmn_uft_info_t;
 
 typedef struct {
+    uint32_t   num_units_per_entry;
+    /* app name */
+    char       app_name[NAS_CMN_PROFILE_NAME_SIZE+1];
+}nas_cmn_acl_profile_app_info_t;
+
+typedef struct {
+    /* ACL profile application group information */
+    uint8_t         num_app;
+    uint8_t         default_pool_count;
+    uint8_t         current_pool_count;
+   /* configured value will be active on next save and reboot */
+    uint8_t         next_boot_pool_count;
+    uint16_t        depth_per_pool;
+    uint16_t        stage_type;
+    /* application group name */
+    char            app_group_name[NAS_CMN_PROFILE_NAME_SIZE+1];
+
+    /* information on ACL profile application info for this app-group */
+    nas_cmn_acl_profile_app_info_t *app_info;
+
+}nas_cmn_acl_profile_app_group_info_t;
+
+typedef struct {
    uint8_t num_npus;
    uint8_t num_profiles;
    uint8_t num_uft_modes;
+   /* ACL profile ingress pool count */
+   uint8_t acl_profile_max_ingress_pool_count;
+   /* ACL profile egress pool count */
+   uint8_t acl_profile_max_egress_pool_count;
+
    /* All supported profiles */
    nas_cmn_sw_profile_t *profiles;
    /* current active profile name*/
@@ -62,6 +90,13 @@ typedef struct {
    /* All supported UFT modes with info, the UFT modes starts from
       1, so the array 0 is not used */
    nas_cmn_uft_info_t *uft_info;
+
+   /* All information on ACL profile app-group info */
+   nas_cmn_acl_profile_app_group_info_t *acl_profile_app_group_info;
+
+   /* ACL profile validity flag */
+   bool acl_profile_valid;
+
    /* current active UFT mode */
    uint32_t current_uftmode;
    /* current configured (will be active on next save and reboot) UFT mode */
@@ -103,6 +138,7 @@ t_std_error nas_switch_update_uft_info (std_config_node_t node);
 t_std_error nas_switch_update_profile_info(std_config_node_t node);
 t_std_error nas_switch_update_npu_profile_info (std_config_node_t node);
 t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node);
+t_std_error nas_switch_update_acl_profile_info (std_config_node_t node);
 #ifdef __cplusplus
 }
 #endif /* extern C */

@@ -26,9 +26,10 @@
 #ifndef __HAL_INTF_COM_H_
 #define __HAL_INTF_COM_H_
 
+#include "dell-base-common.h"
+#include "dell-base-interface-common.h"
 #include "std_error_codes.h"
 #include "ds_common_types.h"
-#include "dell-base-interface-common.h"
 #include "nas_types.h"
 #include "nas_vrf_utils.h"
 
@@ -157,6 +158,8 @@ t_std_error dn_hal_if_register(hal_intf_reg_op_type_t reg_opt,interface_ctrl_t *
 
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type, char *ietf_type, size_t size);
 
+bool ietf_to_nas_os_if_type_get(const char *ietf_type, BASE_CMN_INTERFACE_TYPE_t *if_type);
+
 bool ietf_to_nas_if_type_get(const char *ietf_type, nas_int_type_t *if_type);
 
 /*!
@@ -182,6 +185,7 @@ t_std_error dn_hal_update_intf_mac(hal_ifindex_t ifx, const char *mac);
  *  \param[in] info - Router interface information for operation in VRF context.
  *  \return     std_error
  */
+
 t_std_error nas_cmn_update_router_intf_info(hal_vrf_id_t vrf_id, hal_ifindex_t ifx,
                                             l3_intf_info_t *info);
 
