@@ -34,12 +34,15 @@
 #include <string.h>
 #include <stdio.h>
 
+#define NAS_SWITCH_INTERFACE_FILE_NAME "/etc/opx/nas_if_nocreate"
+
 static const char *switch_cfg_path = NULL;
 static bool failed = false;
 
 static nas_switches_t switches;
 static size_t num_switches = 0;
 static bool nas_sw_fc_supported = 0;
+static bool nas_sw_os_event_flag = true;
 
 static nas_switch_detail_t *switch_cfg;
 
@@ -49,6 +52,16 @@ bool nas_switch_get_fc_supported(void) {
 
 size_t nas_switch_get_max_npus(void) {
     return num_switches;
+}
+
+bool init_intf_os_event_flag(void) {
+    FILE *file = NULL;
+    file = fopen(NAS_SWITCH_INTERFACE_FILE_NAME, "r");
+    if (file) {
+        fclose(file);
+        return false;
+    }
+    return true;
 }
 
 uint32_t * int_array_from_string(const char * str, size_t *expected_len) {
@@ -158,6 +171,12 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch ACL profile info");
         nas_switch_update_acl_profile_info (node);
     }
+
+    if (strncmp(name,"deep_buffer_mode", strlen(name))==0)
+    {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse Deep Buffer Mode info");
+        nas_switch_update_deep_buffer_mode_info(node);
+    }
 }
 
 t_std_error nas_switch_init(void) {
@@ -187,7 +206,13 @@ t_std_error nas_switch_init(void) {
         return STD_ERR(HALCOM,FAIL,0);
     }
 
+    nas_sw_os_event_flag = init_intf_os_event_flag();
     return rc;
+}
+
+
+bool nas_switch_get_os_event_flag() {
+    return nas_sw_os_event_flag;
 }
 
 const nas_switches_t * nas_switch_inventory() {

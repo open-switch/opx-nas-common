@@ -143,6 +143,14 @@ const char *nas_switch_get_hw_info(nas_switch_id_t);
 uint32_t nas_switch_get_cpu_port_id(nas_switch_id_t);
 
 /**
+ * @brief Returns the flag to indicate whether OS event is required or not
+ *        for any of the NAS operations when the configurations
+ *        are handled directly thru CPS object.
+ * @param  None
+ * @return True id the OS event is required, false otherwise.
+ */
+bool nas_switch_get_os_event_flag();
+/**
 * \}
 */
 

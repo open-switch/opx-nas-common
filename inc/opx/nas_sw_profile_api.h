@@ -284,6 +284,27 @@ t_std_error nas_sw_acl_profile_app_group_info_set (const char *app_group_name, u
 
 t_std_error nas_switch_upd_acl_profile_info_to_running_cps_db (uint32_t sw_id);
 
+/**
+ * This function gets current deep buffer mode value
+ * @param cur_deep_buffer_mode[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_cur_deep_buffer_mode_get(bool *cur_deep_buffer_mode);
+
+/**
+ * This function gets configured deep buffer mode value
+ * @param conf_deep_buffer_mode[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_conf_deep_buffer_mode_get(bool *conf_deep_buffer_mode);
+
+/**
+ * This function sets deep buffer mode based on the op_type
+ * @param enable, boolean to enable or disable deep buffer mode
+ * @return standard error
+ */
+t_std_error nas_sw_profile_conf_deep_buffer_mode_set(bool enable);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif
