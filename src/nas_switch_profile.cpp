@@ -443,6 +443,33 @@ t_std_error nas_switch_update_acl_profile_info (std_config_node_t node)
     return STD_ERR_OK;
 }
 
+/* parse switch.xml file and update Deep Buffer Mode info */
+t_std_error nas_switch_update_deep_buffer_mode_info (std_config_node_t node)
+{
+    uint32_t is_dbm_cfg_required, def_dbm;
+
+    nas_std_cfg_attr_update(node, "config_required",&is_dbm_cfg_required);
+    nas_switch_info.is_deep_buffer_mode_cfg_req = is_dbm_cfg_required;
+
+    if (nas_switch_info.is_deep_buffer_mode_cfg_req) {
+
+        nas_std_cfg_attr_update(node, "default_dbm",&def_dbm);
+        nas_switch_info.def_deep_buffer_mode = def_dbm;
+
+        /* Init default value as current value */
+        nas_switch_info.cur_deep_buffer_mode = nas_switch_info.def_deep_buffer_mode;
+        nas_switch_info.next_boot_deep_buffer_mode = nas_switch_info.cur_deep_buffer_mode;
+    }
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","Deep Buffer Mode Cfg Required:%d",
+                                nas_switch_info.is_deep_buffer_mode_cfg_req);
+
+    EV_LOGGING(NAS_COM, DEBUG, "NAS-CMN-SWITCH","Deep Buffer Mode Default:%d",
+                                nas_switch_info.def_deep_buffer_mode);
+
+    return STD_ERR_OK;
+}
+
 /* switch profile API's can be used by
     -CPS get/set from nas-l2 and
     -from nas-ndi to read init parametrs
@@ -1598,6 +1625,7 @@ t_std_error nas_sw_acl_profile_parse_db_and_update(uint32_t sw_id)
 t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 {
     bool profile_found, uft_found, ecmp_found, ipv6_ext_prefix_found;
+    bool deep_buffer_mode_found = false;
     char *conf_profile = NULL;
 
     profile_found = uft_found = ecmp_found = false;
@@ -1663,6 +1691,14 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
                     ipv6_ext_prefix_found = true;
                 }
                 break;
+                case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE:
+                {
+                    nas_switch_info.next_boot_deep_buffer_mode = cps_api_object_attr_data_u32(it.attr);
+                    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch deep buffer mode from DB %d",
+                                                nas_switch_info.next_boot_deep_buffer_mode);
+                    deep_buffer_mode_found = true;
+                }
+                break;
                 default:
                 break;
             }
@@ -1677,9 +1713,9 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
     if (profile_found == false)
     {
         /* copy default profile name */
-        strncpy(nas_switch_info.next_boot_profile.name,
-                nas_switch_info.def_profile.name,
-                sizeof(nas_switch_info.next_boot_profile.name));
+        safestrncpy(nas_switch_info.next_boot_profile.name,
+                    nas_switch_info.def_profile.name,
+                    sizeof(nas_switch_info.next_boot_profile.name));
         EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch profile not present in DB,"
                         "set default %s", nas_switch_info.next_boot_profile.name);
     }
@@ -1701,14 +1737,21 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
         EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch ipv6_ext_prefix_routes not present in DB,"
                         "set default %d", nas_switch_info.next_ipv6_ext_prefix_routes);
     }
+    if (deep_buffer_mode_found == false)
+    {
+        nas_switch_info.next_boot_deep_buffer_mode =  nas_switch_info.def_deep_buffer_mode;
+        EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch deep buffer mode not present in DB,"
+                        "set default %d", nas_switch_info.next_boot_deep_buffer_mode);
+    }
 
     /* Update current values, same as next boot values on the boot */
-    strncpy(nas_switch_info.current_profile.name,
-            nas_switch_info.next_boot_profile.name,
-            sizeof(nas_switch_info.current_profile.name));
+    safestrncpy(nas_switch_info.current_profile.name,
+                nas_switch_info.next_boot_profile.name,
+                sizeof(nas_switch_info.current_profile.name));
     nas_switch_info.current_uftmode = nas_switch_info.next_boot_uftmode;
     nas_switch_info.cur_max_ecmp_per_grp = nas_switch_info.next_boot_max_ecmp_per_grp;
     nas_switch_info.cur_ipv6_ext_prefix_routes = nas_switch_info.next_ipv6_ext_prefix_routes;
+    nas_switch_info.cur_deep_buffer_mode = nas_switch_info.next_boot_deep_buffer_mode;
 
     /* In some cases there will be stale values in DB with RUNNING qualifier,
        clear them*/
@@ -1745,6 +1788,10 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
    cps_api_object_attr_add_u32(db_obj,
                                 BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_IPV6_EXTENDED_PREFIX_ROUTES,
                                 nas_switch_info.cur_ipv6_ext_prefix_routes);
+   cps_api_object_attr_add_u32(db_obj,
+                                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE,
+                                nas_switch_info.cur_deep_buffer_mode);
+
 
     cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
     if (ret != cps_api_ret_code_OK)
@@ -1775,7 +1822,6 @@ bool nas_sw_profile_is_ipv6_ext_prefix_config_required(void)
 {
     return (nas_switch_info.is_ipv6_ext_prefix_cfg_req ? true : false);
 }
-
 
 /* nas_sw_profile_cur_ipv6_ext_prefix_routes_get - will get current confiured ipv6
     extended prefix routes */
@@ -1942,4 +1988,91 @@ t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_set(uint32_t conf_ipv6_ex
     return STD_ERR_OK;
 }
 
+bool nas_sw_profile_is_deep_buffer_mode_config_required(void)
+{
+    return (nas_switch_info.is_deep_buffer_mode_cfg_req ? true : false);
+}
+
+/* nas_sw_profile_cur_deep_buffer_mode_get - will get current configured deep buffer mode */
+t_std_error nas_sw_profile_cur_deep_buffer_mode_get(bool *cur_deep_buffer_mode)
+{
+    if (nas_sw_profile_is_deep_buffer_mode_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Deep Buffer Mode config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (cur_deep_buffer_mode == NULL) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+    *cur_deep_buffer_mode = nas_switch_info.cur_deep_buffer_mode;
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_conf_deep_buffer_mode_get - will get configured deep buffer mode */
+t_std_error nas_sw_profile_conf_deep_buffer_mode_get(bool *conf_deep_buffer_mode)
+{
+    if (conf_deep_buffer_mode == NULL)
+    {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Invalid input");
+        return STD_ERR(HALCOM,PARAM, e_std_err_code_PARAM);
+    }
+
+    if (nas_sw_profile_is_deep_buffer_mode_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Deep Buffer mode config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    /* If no object in DB or corrupted data, return default */
+    *conf_deep_buffer_mode = nas_switch_info.def_deep_buffer_mode;
+
+    cps_api_object_list_guard obj_list(nas_sw_profile_startup_cps_db_get());
+    cps_api_object_list_t list = obj_list.get();
+    if(list==nullptr)
+    {
+        EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","No object in startup DB");
+    }
+    else
+    {
+        //Currently handled for only one switch id, get the first object
+        cps_api_object_t obj = cps_api_object_list_get(list,0);
+        if(obj != nullptr)
+        {
+            uint32_t *next_boot_deep_buffer_mode =
+                (uint32_t *)cps_api_object_get_data(obj,
+                BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE);
+            if(next_boot_deep_buffer_mode != NULL)
+                *conf_deep_buffer_mode = *next_boot_deep_buffer_mode;
+
+        }
+    }
+    return STD_ERR_OK;
+}
+
+/* nas_sw_profile_conf_deep_buffer_mode_set - configures the deep buffer mode,
+   which will take effect on next boot, if its saved   */
+t_std_error nas_sw_profile_conf_deep_buffer_mode_set(bool enable)
+{
+    if (nas_sw_profile_is_deep_buffer_mode_config_required() == false) {
+        EV_LOGGING(NAS_COM, ERR, "NAS-CMN-SWITCH","Deep Buffer Mode config is not required");
+        /* e_std_err_code_NOTSUPPORTED Will be changed to e_std_err_code_NOTAPPLICABLE,
+         * After adding new error code*/
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    }
+
+    if (enable) {
+        nas_switch_info.next_boot_deep_buffer_mode =  true;
+    } else {
+        nas_switch_info.next_boot_deep_buffer_mode = false;
+    }
+
+    EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","Deep Buffer Mode for next reload set to: %d", 
+               nas_switch_info.next_boot_deep_buffer_mode);
+
+    return STD_ERR_OK;
+}
 } /* extern C */

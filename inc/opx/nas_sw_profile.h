@@ -131,6 +131,20 @@ typedef struct {
     *  This varibale to define block size */
    uint32_t ipv6_ext_prefix_route_blk_size;
 
+   /* Is configuration required to support Deep Buffer Mode " */
+   bool is_deep_buffer_mode_cfg_req;
+  
+
+   /* Default value of supported "Deep Buffer Mode" */
+   bool def_deep_buffer_mode;
+
+   /* current value of "Deep Buffer Mode" */
+   bool cur_deep_buffer_mode;
+
+   /* configured value of "Deep Buffer Mode",
+        (will be active on next save and reboot */
+   bool next_boot_deep_buffer_mode;
+
 }nas_cmn_sw_init_info_t;
 
 t_std_error nas_switch_update_ecmp_info (std_config_node_t node);
@@ -139,6 +153,8 @@ t_std_error nas_switch_update_profile_info(std_config_node_t node);
 t_std_error nas_switch_update_npu_profile_info (std_config_node_t node);
 t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node);
 t_std_error nas_switch_update_acl_profile_info (std_config_node_t node);
+t_std_error nas_switch_update_deep_buffer_mode_info (std_config_node_t node);
+
 #ifdef __cplusplus
 }
 #endif /* extern C */

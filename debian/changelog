@@ -1,3 +1,11 @@
+opx-nas-common (7.3.0+opx1) unstable; urgency=medium
+
+  * Feature: Support deep buffer mode in S4200
+  * Update: APIs to determine whether NetLink events are required when
+            configurations are handled directly from CPS objects
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Fri, 16 Nov 2018 17:17:56 -0800
+
 opx-nas-common (7.3.0) unstable; urgency=medium
 
   * Feature: Static L2 VxLAN Support
