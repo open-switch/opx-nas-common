@@ -1,3 +1,9 @@
+opx-nas-common (7.3.0+opx2) unstable; urgency=medium
+
+  * Update: Copyright information
+
+ -- Dell EMC <ops-dev@lists.openswitch.net>  Mon, 10 Dec 2018 17:17:56 -0800
+
 opx-nas-common (7.3.0+opx1) unstable; urgency=medium
 
   * Feature: Support deep buffer mode in S4200
