@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -131,6 +131,31 @@ typedef struct {
     *  This varibale to define block size */
    uint32_t ipv6_ext_prefix_route_blk_size;
 
+   /* L3 RIF and Nexthop table sizes */
+   uint32_t rif_table_size;
+   uint32_t l3_nexthop_table_size;
+   uint32_t rif_block_size;
+   uint32_t l3_nexthop_block_size;
+
+   /* VXLAN RIOT feature enable/disable in the HW */
+   bool cur_vxlan_riot_enable;
+   bool next_boot_vxlan_riot_enable;
+   bool def_vxlan_riot_enable;
+
+   /* Current value of max vxlan overlay rifs */
+   uint32_t cur_max_vxlan_overlay_rifs;
+   /* Configured value of max vxlan overlay rifs */
+   uint32_t next_boot_max_vxlan_overlay_rifs;
+   /* Default value of max vxlan overlay rifs */
+   uint32_t def_max_vxlan_overlay_rifs;
+
+   /* Current value of max vxlan overlay nexthops */
+   uint32_t cur_max_vxlan_overlay_nexthops;
+   /* Configured value of max vxlan overlay nexthops */
+   uint32_t next_boot_max_vxlan_overlay_nexthops;
+   /* Default value of max vxlan overlay nexthops */
+   uint32_t def_max_vxlan_overlay_nexthops;
+   
    /* Is configuration required to support Deep Buffer Mode " */
    bool is_deep_buffer_mode_cfg_req;
   
@@ -153,6 +178,8 @@ t_std_error nas_switch_update_profile_info(std_config_node_t node);
 t_std_error nas_switch_update_npu_profile_info (std_config_node_t node);
 t_std_error nas_switch_update_ipv6_extended_prefix_info (std_config_node_t node);
 t_std_error nas_switch_update_acl_profile_info (std_config_node_t node);
+t_std_error nas_switch_update_vxlan_riot_info (std_config_node_t node);
+t_std_error nas_switch_update_l3_table_size_info (std_config_node_t node);
 t_std_error nas_switch_update_deep_buffer_mode_info (std_config_node_t node);
 
 #ifdef __cplusplus

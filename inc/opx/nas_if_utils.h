@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -26,6 +26,8 @@
 #include "std_error_codes.h"
 #include "ds_common_types.h"
 #include "nas_ndi_obj_id_table.h"
+#include "nas_vrf_utils.h"
+#include "hal_if_mapping.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,14 +53,6 @@ t_std_error dn_hal_get_intf_mac_addr_str(const char *name, char *mac);
  *  \return     std_error
  */
 t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_addr_t mac_addr);
-
-/*!
- *  Function to get NDI IDs for a LAG interface
- *  \param if_index    [in]  Lag interface index
- *  \param ndi_id_data [out] NDI ID Table retrieved from the LAG Opaque data
- *  \return                  std_error
- */
-t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table_handle_t ndi_id_data);
 
 /*!
  *  Function to get the LAG id given the ifindex.
@@ -92,7 +86,30 @@ bool nas_is_virtual_port(hal_ifindex_t if_idx);
  */
 bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj,
                                      nas_int_port_mapping_t *mapping_status);
+/*!
+ * Function to get interface name from interface index
+ * \param if_index [in] Interface index
+ * \param if_name [out] Interface Name
+ * \param len [in]  Length of the interface name variable.
+ * \param vrf_id [in] Associated vrf_id
+ *  \return          std_error
+ */
+t_std_error nas_com_get_if_index_to_name(hal_ifindex_t if_index, char * name, size_t len, hal_vrf_id_t vrf_id);
 
+/*!
+ * Function to get interface index from interface name
+ * \param if_index [out] Interface index
+ * \param if_name [in] Interface Name
+ *  \return          std_error
+ */
+t_std_error nas_com_get_name_to_if_index(const char *name, hal_ifindex_t *if_index);
+/*!
+ * Function to get interface type from interface name
+ * \param type [out] Interface type
+ * \param if_name [in] Interface Name
+ *  \return          std_error
+ */
+t_std_error nas_com_get_if_type(const char *name, nas_int_type_t *type);
 #ifdef __cplusplus
 }
 #endif

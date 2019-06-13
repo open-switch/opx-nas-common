@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -27,7 +27,7 @@ derived_obj_t&  derived_switch_t::get_ut_obj (nas_obj_id_t ut_obj_id)
     try {
         return _ut_objs.at (ut_obj_id);
     } 
-    catch (std::out_of_range) { 
+    catch (std::out_of_range&) { 
         throw nas::base_exception {NAS_BASE_E_PARAM, __PRETTY_FUNCTION__,
                                    "No such UT Obj"};
     }

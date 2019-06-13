@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -51,6 +51,7 @@ typedef nas_obj_id_t lag_id_t;
 
 typedef ndi_obj_id_t nas_bridge_id_t;
 #define NAS_INVALID_BRIDGE_ID  ((nas_bridge_id_t)~0x0)
+#define NAS_INVALID_IF_INDEX  ((hal_ifindex_t) ~0x0)
 
 /** NAS CPS handler common Error codes */
 #define    NAS_BASE_E_NONE           (int)STD_ERR_OK

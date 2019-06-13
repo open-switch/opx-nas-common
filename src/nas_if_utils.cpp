@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -84,54 +84,6 @@ t_std_error dn_hal_get_interface_mac(hal_ifindex_t if_index, hal_mac_addr_t mac_
     }
 
     EV_LOGGING (INTERFACE, INFO, "INTF-C","intf %s mac_addr is %s", _intf.if_name, _intf.mac_addr);
-    return rc;
-}
-
-/*TODO: This function will be deprecated*/
-t_std_error dn_nas_lag_get_ndi_ids (hal_ifindex_t if_index, nas_ndi_obj_id_table_handle_t ndi_id_data)
-{
-    if(ndi_id_data == NULL) {
-        EV_LOGGING(INTERFACE, ERR, "INTF-C","Input ndi_data is NULL");
-        return(STD_ERR(INTERFACE, PARAM, 0));
-    }
-
-    cps_api_get_params_t gp;
-    cps_api_get_request_init(&gp);
-
-    cps_api_object_t obj = cps_api_object_list_create_obj_and_append(gp.filters);
-    t_std_error rc = STD_ERR(INTERFACE, FAIL, 0);
-
-    do {
-        if (!cps_api_key_from_attr_with_qual(cps_api_object_key(obj),
-                DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_OBJ, cps_api_qualifier_TARGET)) {
-            break;
-        }
-
-        cps_api_object_attr_add_u32(obj,DELL_BASE_IF_CMN_IF_INTERFACES_INTERFACE_IF_INDEX, if_index);
-        cps_api_object_attr_add(obj,IF_INTERFACES_INTERFACE_TYPE,
-                (const char *)IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG,
-                sizeof(IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_IANAIFT_IEEE8023ADLAG));
-
-        if (cps_api_get(&gp) != cps_api_ret_code_OK)
-            break;
-
-        if (0 == cps_api_object_list_size(gp.list))
-            break;
-
-        obj = cps_api_object_list_get(gp.list,0);
-        cps_api_attr_id_t  attr_list[] = {BASE_IF_LAG_IF_INTERFACES_INTERFACE_LAG_OPAQUE_DATA};
-
-        if (!nas_ndi_obj_id_table_cps_unserialize (ndi_id_data, obj, attr_list,
-                                                   sizeof (attr_list)/sizeof (cps_api_attr_id_t)))
-        {
-            EV_LOGGING(INTERFACE, ERR, "INTF-C","Failed to get LAG opaque data");
-            break;
-        }
-        rc = STD_ERR_OK;
-
-    } while (0);
-
-    cps_api_get_request_close(&gp);
     return rc;
 }
 
@@ -273,3 +225,67 @@ bool nas_get_phy_port_mapping_change(cps_api_object_t evt_obj, nas_int_port_mapp
     }
     return true;
 }
+
+t_std_error nas_com_get_if_index_to_name(hal_ifindex_t if_index, char * name, size_t len, hal_vrf_id_t vrf_id)
+{
+    interface_ctrl_t intf_ctrl;
+    t_std_error rc = STD_ERR_OK;
+
+    memset(&intf_ctrl, 0, sizeof(interface_ctrl_t));
+
+    intf_ctrl.q_type = HAL_INTF_INFO_FROM_IF;
+    intf_ctrl.if_index = if_index;
+    intf_ctrl.vrf_id = vrf_id;
+
+    if((rc= dn_hal_get_interface_info(&intf_ctrl)) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, DEBUG, "INT-C",
+                   "Interface %d returned error %d", \
+                    intf_ctrl.if_index, rc);
+
+        return STD_ERR(INTERFACE,FAIL, rc);
+    }
+    safestrncpy(name, intf_ctrl.if_name, len);
+    return STD_ERR_OK;
+}
+t_std_error nas_com_get_name_to_if_index(const char *name, hal_ifindex_t *if_index) {
+
+    interface_ctrl_t intf_ctrl;
+    t_std_error rc = STD_ERR_OK;
+
+    memset(&intf_ctrl, 0, sizeof(interface_ctrl_t));
+
+    intf_ctrl.q_type = HAL_INTF_INFO_FROM_IF_NAME;
+    safestrncpy(intf_ctrl.if_name, name, sizeof(intf_ctrl.if_name));
+
+    if((rc= dn_hal_get_interface_info(&intf_ctrl)) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, DEBUG, "INT-C",
+                   "Interface %s mapping not present %d", intf_ctrl.if_name, rc);
+        return STD_ERR(INTERFACE,FAIL, rc);
+    }
+
+    *if_index = intf_ctrl.if_index;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_com_get_if_type(const char *name, nas_int_type_t *type)
+{
+    interface_ctrl_t intf_ctrl;
+    t_std_error rc = STD_ERR_OK;
+
+    memset(&intf_ctrl, 0, sizeof(interface_ctrl_t));
+
+    intf_ctrl.q_type = HAL_INTF_INFO_FROM_IF_NAME;
+    safestrncpy(intf_ctrl.if_name, name, sizeof(intf_ctrl.if_name));
+
+    if((rc= dn_hal_get_interface_info(&intf_ctrl)) != STD_ERR_OK) {
+        EV_LOGGING(INTERFACE, DEBUG, "NAS-INT",
+                   "Interface %d returned error %d", \
+                    intf_ctrl.if_index, rc);
+
+        return STD_ERR(INTERFACE,FAIL, rc);
+    }
+
+    *type = intf_ctrl.int_type;
+    return STD_ERR_OK;
+}
+

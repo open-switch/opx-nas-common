@@ -15,18 +15,25 @@
  */
 
 /*
- * filename: nas_qos_consts.h
+ * filename: nas_com_bridge_utils.h
  */
 
+#ifndef NAS_COM_BRIDGE_UTILS_H_
+#define NAS_COM_BRIDGE_UTILS_H_
 
-/*!
- * Common NAS QoS constants
- */
+#include "std_error_codes.h"
+#include "ds_common_types.h"
 
-#ifndef _NAS_QOS_CONSTS_H_
-#define _NAS_QOS_CONSTS_H_
+t_std_error nas_com_get_1d_br_untag_vid(const char *br_name, hal_vlan_id_t &vlan_id);
 
-#define    NAS_MAX_DSCP      63
-#define    NAS_MAX_DOT1P      7
 
-#endif /* NAS_QOS_CONSTS_H_ */
+t_std_error nas_com_add_1d_br_untag_vid(const char *br_name, hal_vlan_id_t vlan_id);
+
+
+t_std_error nas_com_del_1d_br_untag_vid(const char *br_name);
+
+
+t_std_error nas_com_set_1d_br_reserved_vid(hal_vlan_id_t vlan_id);
+
+#endif
+
