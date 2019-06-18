@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -42,14 +42,12 @@
 
 using _key_t = uint64_t;
 using if_map_t = std::unordered_map<uint64_t,interface_ctrl_t *>;
-using if_name_map_t = std::unordered_map<std::string, interface_ctrl_t *> ;
+static auto if_name_map = *new std::unordered_map<std::string, interface_ctrl_t *> ;
 
 static std_rw_lock_t db_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-static std::set<interface_ctrl_t *> if_records;
-static std::unordered_map<intf_info_t,if_map_t,std::hash<int32_t>> if_mappings;
-
-static if_name_map_t if_name_map;
+static auto if_records = *new std::set<interface_ctrl_t *>;
+static auto if_mappings = *new std::unordered_map<intf_info_t,if_map_t,std::hash<int32_t>>;
 
 static _key_t INVALID_KEY = (~0);
 
@@ -80,13 +78,88 @@ static const size_t _all_queries_t_len = sizeof(_all_queries_t)/sizeof(*_all_que
 
 
 static void print_record(interface_ctrl_t*p) {
-    printf("Name:%s, NPU:%d, Port:%d, SubPort:%d, "
-            "TapID:%d, VRF:%d, IFIndex:%d MAC %s\n",
-            p->if_name,p->npu_id, p->port_id,
-            p->sub_interface,p->tap_id,p->vrf_id,p->if_index, p->mac_addr);
 
+    switch (p->int_type) {
+        case nas_int_type_PORT:
+            printf("PORT:%s, NPU:%d, Port:%d, SubPort:%d, "
+                    "TapID:%d, VRF:%d, IFIndex:%d, MAC:%s, "
+                    "Mapped:%d, ",
+                    p->if_name, p->npu_id, p->port_id,
+                    p->sub_interface, p->tap_id, p->vrf_id,
+                    p->if_index, p->mac_addr, p->port_mapped);
+            if (p->l3_intf_info.if_index)
+                printf("Mapped VRF Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
 
+            break;
+        case nas_int_type_VLAN:
+            printf("VLAN:%s, vlan_id:%d, "
+                    "VRF:%d, IFIndex:%d, MAC:%s, ",
+                    p->if_name, p->vlan_id,
+                    p->vrf_id, p->if_index, p->mac_addr);
+            if (p->l3_intf_info.if_index)
+                printf("Mapped VRF Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
+
+            break;
+        case nas_int_type_LAG:
+            printf("LAG:%s, lag_id:0x%lx, "
+                    "VRF:%d, IFIndex:%d, MAC:%s, ",
+                    p->if_name, p->lag_id,
+                    p->vrf_id,p->if_index, p->mac_addr);
+            if (p->l3_intf_info.if_index)
+                printf("Mapped VRF Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
+
+            break;
+        case nas_int_type_MACVLAN:
+            printf("MAC-VLAN:%s, "
+                    "VRF:%d, IFIndex:%d, MAC:%s, ",
+                    p->if_name, p->vrf_id,
+                    p->if_index, p->mac_addr);
+            if (p->l3_intf_info.if_index)
+                printf("Parent Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
+            break;
+        case nas_int_type_DOT1D_BRIDGE:
+            printf("dot1D Bidge:%s, bridge_id:0x%lx, "
+                    "VRF:%d, IFIndex:%d, MAC:%s, ",
+                    p->if_name, p->bridge_id,
+                    p->vrf_id,p->if_index, p->mac_addr);
+            if (p->l3_intf_info.if_index)
+                printf("Mapped VRF Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
+
+            break;
+        case nas_int_type_LPBK:
+            printf("Loopback:%s, "
+                    "VRF:%d, IFIndex:%d, MAC:%s, ",
+                    p->if_name,
+                    p->vrf_id,p->if_index, p->mac_addr);
+            if (p->l3_intf_info.if_index)
+                printf("Mapped VRF Intf info, VRF:%d, IFIndex:%d", p->l3_intf_info.vrf_id, p->l3_intf_info.if_index);
+            printf("\n");
+
+            break;
+        case nas_int_type_MGMT:
+            printf("MGMT:%s, "
+                    "IFIndex:%d, MAC %s\n",
+                    p->if_name,
+                    p->if_index, p->mac_addr);
+            break;
+        case nas_int_type_VXLAN: //intentional fall through
+        case nas_int_type_CPU:
+        case nas_int_type_FC:
+        case nas_int_type_VLANSUB_INTF:
+        default:
+            printf("Name:%s, IFIndex:%d, "
+                   "Type:%d, MAC:%s,\n",
+                   p->if_name, p->if_index,
+                   p->int_type, p->mac_addr);
+            break;
+    }
 }
+
 
 inline _key_t _mk_key(uint32_t lhs, uint32_t rhs) {
     return  ((_key_t)(lhs))<<32 | rhs;
@@ -183,7 +256,8 @@ static bool _add(intf_info_t type, interface_ctrl_t *rec) {
         if (k==INVALID_KEY) return false;
         if_mappings[type][k] = rec;
     }
-    if_indexes.insert(rec->if_index);
+    if (rec->vrf_id == 0)
+        if_indexes.insert(rec->if_index);
     return true;
 }
 
@@ -223,7 +297,9 @@ static void _cleanup(interface_ctrl_t *rec) {
     }
 
     if_records.erase(_rec);
-    if_indexes.erase(_rec->if_index);
+
+    if (rec->vrf_id == 0)
+        if_indexes.erase(_rec->if_index);
     delete _rec;
 }
 
@@ -241,6 +317,7 @@ static std::map<nas_int_type_t, const char *> nas_to_ietf_if_types  =
     {nas_int_type_MGMT, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT},
     {nas_int_type_VXLAN, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN},
     {nas_int_type_VLANSUB_INTF, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE},
+    {nas_int_type_DOT1D_BRIDGE, IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VIRTUALNETWORK},
 };
 
 
@@ -256,6 +333,7 @@ static auto ietf_to_nas_types  = new std::unordered_map<std::string,nas_int_type
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_MANAGEMENT, nas_int_type_MGMT},
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VXLAN, nas_int_type_VXLAN},
     {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VLANSUBINTERFACE, nas_int_type_VLANSUB_INTF},
+    {IF_INTERFACE_TYPE_IANAIFT_IANA_INTERFACE_TYPE_BASE_IF_VIRTUALNETWORK, nas_int_type_DOT1D_BRIDGE},
 };
 bool nas_to_ietf_if_type_get(nas_int_type_t if_type,  char *ietf_type, size_t size)
 {
@@ -487,9 +565,9 @@ static void dump_tree(intf_info_t q_type) {
 
 }
 
-static void dump_tree_ifname(if_name_map_t &map) {
-    auto it = map.begin();
-    auto end = map.end();
+static void dump_tree_ifname() {
+    auto it = if_name_map.begin();
+    auto end = if_name_map.end();
 
     for ( ; it !=end ; ++it ) {
         printf("ifname:%s ",(it->first).c_str());
@@ -502,25 +580,23 @@ void dn_hal_dump_interface_mapping(void) {
     printf("Dumping NPU/Port mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_PORT);
 
-    printf("Dumping NPU/Port ifname mapping...\n");
-    dump_tree_ifname(if_name_map);
+    printf("\nDumping NPU/Port ifname mapping...\n");
+    dump_tree_ifname();
 
-    printf("Dumping interface index mapping...\n");
+    printf("\nDumping interface index mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_IF);
 
-    printf("Dumping tap index mapping...\n");
+    printf("\nDumping tap index mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_TAP);
 
-    printf("Dumping VLAN ID mapping...\n");
+    printf("\nDumping VLAN ID mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_VLAN);
 
-    printf("Dumping LAG ID mapping...\n");
+    printf("\nDumping LAG ID mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_LAG);
 
-    printf("Dumping BRIDGE ID mapping...\n");
+    printf("\nDumping BRIDGE ID mapping...\n");
     dump_tree(HAL_INTF_INFO_FROM_BRIDGE_ID);
-
-
 }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -42,6 +42,7 @@ static bool failed = false;
 static nas_switches_t switches;
 static size_t num_switches = 0;
 static bool nas_sw_fc_supported = 0;
+static bool nas_sw_l2mc_vlan_port_lookup_enabled = false;
 static bool nas_sw_os_event_flag = true;
 
 static nas_switch_detail_t *switch_cfg;
@@ -49,6 +50,49 @@ static nas_switch_detail_t *switch_cfg;
 bool nas_switch_get_fc_supported(void) {
     return nas_sw_fc_supported;
 }
+
+bool nas_switch_get_l2mc_vlan_port_lookup_enabled (void)
+{
+    return nas_sw_l2mc_vlan_port_lookup_enabled;
+}
+
+/*
+ * Handler function to process and store the switch configuration for 
+ * LAG and ECMP resilient hash support.  By default, if no configuration
+ * support flag exists in the configuration file, the feature is not supported.
+ * is_lag       : true if LAG, false for ECMP
+ * is_update    : true to update setting, false to read value only
+ * is_supported : true if feature is supported, false if not supported
+ */
+static bool nas_switch_resilient_hash_handler(bool is_lag, bool is_update, bool is_supported)
+{
+    static bool lag_supported;
+    static bool ecmp_supported;
+
+    /* update from configration file */
+    if (is_update) {
+        if (is_lag)
+            lag_supported = is_supported;
+        else
+            ecmp_supported = is_supported;
+    } 
+
+    if (is_lag)
+        return lag_supported;
+    else
+        return ecmp_supported;
+}
+
+bool nas_switch_resilient_hash_ecmp_supported(void)
+{
+    return nas_switch_resilient_hash_handler(/* ecmp */false, false, false);
+}
+
+bool nas_switch_resilient_hash_lag_supported(void)
+{
+    return nas_switch_resilient_hash_handler(/* lag */true, false, false);
+}
+
 
 size_t nas_switch_get_max_npus(void) {
     return num_switches;
@@ -144,6 +188,14 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         nas_sw_fc_supported = atoi(status);
         EV_LOGGING(NAS_COM, INFO, "SWITCH","fc_enabled %d",nas_sw_fc_supported);
     }
+    if (strncmp(name,"switch_multicast_config", strlen(name))==0) {
+        const char *mc_lookup = std_config_attr_get(node,"l2mc_vlan_port_lookup_enabled");
+        if (mc_lookup != NULL) {
+            nas_sw_l2mc_vlan_port_lookup_enabled = atoi(mc_lookup);
+        }
+        EV_LOGGING(NAS_COM, INFO, "SWITCH","nas_sw_l2mc_vlan_port_lookup_enabled : %d",
+                nas_sw_l2mc_vlan_port_lookup_enabled);
+    }
     if (strncmp(name,"switch_profile", strlen(name))==0) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch profile info");
         nas_switch_update_profile_info(node);
@@ -156,6 +208,22 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch UFT info");
         nas_switch_update_uft_info(node);
     }
+
+    if (strncmp(name,"switch_resilient_hash", strlen(name))==0) {
+        char * status = std_config_attr_get(node, "lag_enabled");
+
+        if (status != NULL) {
+            (void)nas_switch_resilient_hash_handler(true, true, true);
+            EV_LOGGING(NAS_COM, INFO, "SWITCH", "Resilient Hash support for LAG enabled");
+        }
+
+        status = std_config_attr_get(node, "ecmp_enabled");
+        if (status != NULL) {
+            (void)nas_switch_resilient_hash_handler(false, true, true);
+            EV_LOGGING(NAS_COM, INFO, "SWITCH", "Resilient Hash support for ECMP enabled");
+        }
+    }
+
     if (strncmp(name,"switch_ecmp", strlen(name))==0) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch ECMP info");
         nas_switch_update_ecmp_info(node);
@@ -170,6 +238,18 @@ void _fn_switch_parser(std_config_node_t node, void *user_data) {
     if (strncmp(name,"switch_acl_profile", strlen(name))==0) {
         EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch ACL profile info");
         nas_switch_update_acl_profile_info (node);
+    }
+
+    if (strncmp(name,"vxlan-riot-config", strlen(name))==0)
+    {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch VXLAN RIOT info");
+        nas_switch_update_vxlan_riot_info(node);
+    }
+
+    if (strncmp(name,"l3-table-size", strlen(name))==0)
+    {
+        EV_LOGGING(NAS_COM, INFO, "SWITCH"," Parse switch L3 table size info");
+        nas_switch_update_l3_table_size_info(node);
     }
 
     if (strncmp(name,"deep_buffer_mode", strlen(name))==0)
@@ -259,4 +339,5 @@ uint32_t nas_switch_get_cpu_port_id (nas_switch_id_t switch_id)
         return 0;
     }
 }
+
 

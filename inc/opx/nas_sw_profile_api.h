@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -285,7 +285,56 @@ t_std_error nas_sw_acl_profile_app_group_info_set (const char *app_group_name, u
 t_std_error nas_switch_upd_acl_profile_info_to_running_cps_db (uint32_t sw_id);
 
 /**
- * This function gets current deep buffer mode value
+ * This function enables/disables for VXLAN RIOT feature
+ * @param conf_vxlan_riot_status value
+ * @param op_type, cps api operation type(create,delete,set etc.)
+ * @return standard error
+ */
+t_std_error nas_sw_profile_vxlan_riot_status_set(uint32_t conf_vxlan_riot_status, cps_api_operation_types_t op_type);
+
+/**
+ * This function sets VXLAN overlay RIFs value
+ * @param conf_vxlan_overlay_rifs value
+ * @param op_type, cps api operation type(create,delete,set etc.)
+ * @return standard error
+ */
+
+t_std_error nas_sw_profile_max_vxlan_overlay_rifs_set(uint32_t conf_vxlan_overlay_rifs, cps_api_operation_types_t op_type);
+
+/**
+ * This function sets VXLAN overlay nexthops value
+ * @param conf_vxlan_overlay_nhs value
+ * @param op_type, cps api operation type(create,delete,set etc.)
+ * @return standard error
+ */
+t_std_error nas_sw_profile_max_vxlan_overlay_nhs_set(uint32_t conf_vxlan_overlay_nhs, cps_api_operation_types_t op_type);
+
+/**
+ * This function gets configured(next_boot) value of vxlan riot enable/disable and max overaly rifs and nexthops
+ * @param conf_vxlan_riot_config[out], conf_vxlan_max_overlay_rifs[out], conf_vxlan_max_overlay_nexthops[out]
+ * @return standard error
+ */
+t_std_error nas_sw_profile_vxlan_riot_conf_get(uint32_t *conf_vxlan_riot_config, uint32_t *conf_vxlan_max_overlay_rifs,
+                                               uint32_t *conf_vxlan_max_overlay_nexthops);
+t_std_error nas_sw_profile_vxlan_riot_status_get(uint32_t *cur_vxlan_riot_status, uint32_t *conf_vxlan_riot_status);
+t_std_error nas_sw_profile_max_vxlan_overlay_rifs_get(uint32_t *cur_vxlan_overlay_rifs, uint32_t *conf_vxlan_overlay_rifs);
+t_std_error nas_sw_profile_max_vxlan_overlay_nhs_get(uint32_t *cur_vxlan_overlay_nhs, uint32_t *conf_vxlan_overlay_nhs);
+
+/**
+ * This function gets RIF table size value
+ * @param rif_table_size[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_rif_table_size_get(uint32_t *rif_table_size);
+
+/**
+ * This function gets L3 nexthop table size value
+ * @param l3_nexthop_table_size[out], pointer to store the value
+ * @return standard error
+ */
+t_std_error nas_sw_profile_l3_nexthop_table_size_get(uint32_t *l3_nexthop_table_size);
+
+/* This function gets current deep buffer mode value
  * @param cur_deep_buffer_mode[out], pointer to store the value
  * @return standard error
  */

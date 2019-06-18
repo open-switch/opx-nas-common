@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -443,6 +443,48 @@ t_std_error nas_switch_update_acl_profile_info (std_config_node_t node)
     return STD_ERR_OK;
 }
 
+/* parse switch.xml file and update VXLAN RIOT info */
+t_std_error nas_switch_update_vxlan_riot_info (std_config_node_t node)
+{
+    uint32_t vxlan_riot_enable = 0;
+
+    nas_std_cfg_attr_update(node, "enable", &vxlan_riot_enable);
+
+    nas_switch_info.def_vxlan_riot_enable = vxlan_riot_enable;
+    if (nas_switch_info.def_vxlan_riot_enable) {
+
+        nas_std_cfg_attr_update(node, "max_overlay_rifs",
+                                &nas_switch_info.def_max_vxlan_overlay_rifs);
+
+        nas_std_cfg_attr_update(node, "max_overlay_nexthops",
+                                &nas_switch_info.def_max_vxlan_overlay_nexthops);
+
+        /* Init default value as current value */
+        nas_switch_info.cur_vxlan_riot_enable = nas_switch_info.def_vxlan_riot_enable;
+        nas_switch_info.cur_max_vxlan_overlay_rifs = nas_switch_info.def_max_vxlan_overlay_rifs;
+        nas_switch_info.cur_max_vxlan_overlay_nexthops = nas_switch_info.def_max_vxlan_overlay_nexthops;
+    }
+
+    EV_LOGGING(NAS_COM, NOTICE, "NAS-CMN-SWITCH","VXLAN RIOT Default:%d, RIFs:%d NHs:%d",
+               nas_switch_info.def_vxlan_riot_enable,
+               nas_switch_info.def_max_vxlan_overlay_rifs,
+               nas_switch_info.def_max_vxlan_overlay_nexthops);
+    return STD_ERR_OK;
+}
+
+/* parse switch.xml file and update VXLAN RIOT info */
+t_std_error nas_switch_update_l3_table_size_info (std_config_node_t node)
+{
+    nas_std_cfg_attr_update(node, "max_rifs", &nas_switch_info.rif_table_size);
+    nas_std_cfg_attr_update(node, "rif_block_size", &nas_switch_info.rif_block_size);
+    nas_std_cfg_attr_update(node, "max_nexthops", &nas_switch_info.l3_nexthop_table_size);
+    nas_std_cfg_attr_update(node, "nexthop_block_size", &nas_switch_info.l3_nexthop_block_size);
+
+    EV_LOGGING(NAS_COM, NOTICE, "NAS-CMN-SWITCH","L3 table size RIFs:%d NHs:%d",
+               nas_switch_info.rif_table_size, nas_switch_info.l3_nexthop_table_size);
+    return STD_ERR_OK;
+}
+
 /* parse switch.xml file and update Deep Buffer Mode info */
 t_std_error nas_switch_update_deep_buffer_mode_info (std_config_node_t node)
 {
@@ -675,7 +717,7 @@ t_std_error nas_sw_profile_conf_profile_set(uint32_t sw_id, char *conf_profile,
                     (conf_profile)?conf_profile:"NULL");
         memset(nas_switch_info.next_boot_profile.name, 0,
                 sizeof(nas_switch_info.next_boot_profile.name));
-        strncpy(nas_switch_info.next_boot_profile.name,
+        safestrncpy(nas_switch_info.next_boot_profile.name,
                 nas_switch_info.def_profile.name,
                 sizeof(nas_switch_info.next_boot_profile.name));
         return STD_ERR_OK;
@@ -688,8 +730,8 @@ t_std_error nas_sw_profile_conf_profile_set(uint32_t sw_id, char *conf_profile,
     }
     memset(nas_switch_info.next_boot_profile.name, 0,
             sizeof(nas_switch_info.next_boot_profile.name));
-    strncpy(nas_switch_info.next_boot_profile.name, conf_profile,
-            sizeof(nas_switch_info.next_boot_profile.name));
+    safestrncpy(nas_switch_info.next_boot_profile.name, conf_profile,
+                sizeof(nas_switch_info.next_boot_profile.name));
     return STD_ERR_OK;
 }
 /* General API to return number profile supported, this is based on
@@ -1624,7 +1666,7 @@ t_std_error nas_sw_acl_profile_parse_db_and_update(uint32_t sw_id)
 /****** CPS DB  Get, Set for Switching entity *******/
 t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
 {
-    bool profile_found, uft_found, ecmp_found, ipv6_ext_prefix_found;
+    bool profile_found, uft_found, ecmp_found, ipv6_ext_prefix_found, vxlan_riot_conf_found = false;
     bool deep_buffer_mode_found = false;
     char *conf_profile = NULL;
 
@@ -1660,8 +1702,9 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
                 case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_SWITCH_PROFILE:
                 {
                     conf_profile = (char *)cps_api_object_attr_data_bin(it.attr);
-                    strncpy(nas_switch_info.next_boot_profile.name, conf_profile,
-                            sizeof(nas_switch_info.next_boot_profile.name));
+                    safestrncpy(nas_switch_info.next_boot_profile.name,
+                                conf_profile,
+                                sizeof(nas_switch_info.next_boot_profile.name));
                     EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch profile from DB %s",
                                 conf_profile);
                     profile_found = true;
@@ -1691,6 +1734,29 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
                     ipv6_ext_prefix_found = true;
                 }
                 break;
+                case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_VXLAN_RIOT_ENABLE:
+                {
+                    nas_switch_info.next_boot_vxlan_riot_enable = cps_api_object_attr_data_u32(it.attr);
+                    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch VXLAN RIOT from DB %d",
+                               nas_switch_info.next_boot_vxlan_riot_enable);
+                    vxlan_riot_conf_found = true;
+                }
+                break;
+                case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_RIFS:
+                {
+                    nas_switch_info.next_boot_max_vxlan_overlay_rifs = cps_api_object_attr_data_u32(it.attr);
+                    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch VXLAN RIOT RIFs from DB %d",
+                               nas_switch_info.next_boot_max_vxlan_overlay_rifs);
+                }
+                break;
+                case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_NEXTHOPS:
+                {
+                    nas_switch_info.next_boot_max_vxlan_overlay_nexthops = cps_api_object_attr_data_u32(it.attr);
+                    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch VXLAN RIOT NHs from DB %d",
+                               nas_switch_info.next_boot_max_vxlan_overlay_nexthops);
+                }
+                break;
+
                 case BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE:
                 {
                     nas_switch_info.next_boot_deep_buffer_mode = cps_api_object_attr_data_u32(it.attr);
@@ -1737,6 +1803,14 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
         EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch ipv6_ext_prefix_routes not present in DB,"
                         "set default %d", nas_switch_info.next_ipv6_ext_prefix_routes);
     }
+    if (vxlan_riot_conf_found == false) {
+        nas_switch_info.next_boot_vxlan_riot_enable = nas_switch_info.def_vxlan_riot_enable;
+        nas_switch_info.next_boot_max_vxlan_overlay_rifs = nas_switch_info.def_max_vxlan_overlay_rifs;
+        nas_switch_info.next_boot_max_vxlan_overlay_nexthops = nas_switch_info.def_max_vxlan_overlay_nexthops;
+        EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","switch VXLAN RIOT not present in DB,"
+                   "set default enable:%d rifs:%d nhs:%d", nas_switch_info.next_boot_vxlan_riot_enable,
+                   nas_switch_info.next_boot_max_vxlan_overlay_rifs, nas_switch_info.next_boot_max_vxlan_overlay_nexthops);
+    }
     if (deep_buffer_mode_found == false)
     {
         nas_switch_info.next_boot_deep_buffer_mode =  nas_switch_info.def_deep_buffer_mode;
@@ -1753,6 +1827,14 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
     nas_switch_info.cur_ipv6_ext_prefix_routes = nas_switch_info.next_ipv6_ext_prefix_routes;
     nas_switch_info.cur_deep_buffer_mode = nas_switch_info.next_boot_deep_buffer_mode;
 
+    /* VXLAN RIOT current boot values initialization */
+    nas_switch_info.cur_vxlan_riot_enable = nas_switch_info.next_boot_vxlan_riot_enable;
+    nas_switch_info.cur_max_vxlan_overlay_rifs = nas_switch_info.next_boot_max_vxlan_overlay_rifs;
+    nas_switch_info.cur_max_vxlan_overlay_nexthops = nas_switch_info.next_boot_max_vxlan_overlay_nexthops;
+
+    EV_LOGGING(NAS_COM, NOTICE, "SWITCH-INIT","Assign switch VXLAN RIOT from DB - Status:%d RIFs:%d NHs:%d",
+               nas_switch_info.cur_vxlan_riot_enable, nas_switch_info.cur_max_vxlan_overlay_rifs,
+               nas_switch_info.cur_max_vxlan_overlay_nexthops);
     /* In some cases there will be stale values in DB with RUNNING qualifier,
        clear them*/
     cps_api_object_t db_obj = cps_api_object_create();
@@ -1789,9 +1871,17 @@ t_std_error nas_sw_parse_db_and_update(uint32_t sw_id)
                                 BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_IPV6_EXTENDED_PREFIX_ROUTES,
                                 nas_switch_info.cur_ipv6_ext_prefix_routes);
    cps_api_object_attr_add_u32(db_obj,
+                               BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_VXLAN_RIOT_ENABLE,
+                               nas_switch_info.cur_vxlan_riot_enable);
+   cps_api_object_attr_add_u32(db_obj,
+                               BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_RIFS,
+                               nas_switch_info.cur_max_vxlan_overlay_rifs);
+   cps_api_object_attr_add_u32(db_obj,
+                               BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_MAX_VXLAN_OVERLAY_NEXTHOPS,
+                               nas_switch_info.cur_max_vxlan_overlay_nexthops);
+   cps_api_object_attr_add_u32(db_obj,
                                 BASE_SWITCH_SWITCHING_ENTITIES_SWITCHING_ENTITY_DEEP_BUFFER_MODE_ENABLE,
                                 nas_switch_info.cur_deep_buffer_mode);
-
 
     cps_api_return_code_t ret =  cps_api_db_commit_one(cps_api_oper_SET, db_obj, NULL, false);
     if (ret != cps_api_ret_code_OK)
@@ -1985,6 +2075,100 @@ t_std_error nas_sw_profile_conf_ipv6_ext_prefix_routes_set(uint32_t conf_ipv6_ex
     }
 
     nas_switch_info.next_ipv6_ext_prefix_routes =  conf_ipv6_ext_prefix_routes;
+    return STD_ERR_OK;
+}
+
+/* This function will be invoked from NDI for HW initialisations */
+t_std_error nas_sw_profile_vxlan_riot_conf_get(uint32_t *conf_vxlan_riot_config, uint32_t *conf_vxlan_max_overlay_rifs,
+                                               uint32_t *conf_vxlan_max_overlay_nexthops) {
+
+    *conf_vxlan_riot_config = nas_switch_info.next_boot_vxlan_riot_enable;
+    *conf_vxlan_max_overlay_rifs = nas_switch_info.next_boot_max_vxlan_overlay_rifs;
+    *conf_vxlan_max_overlay_nexthops = nas_switch_info.next_boot_max_vxlan_overlay_nexthops;
+    return STD_ERR_OK;
+}
+
+/* The below functions will be invokes from NAS-L2 for CPS observed/target get support */
+t_std_error nas_sw_profile_vxlan_riot_status_set(uint32_t conf_vxlan_riot_status, cps_api_operation_types_t op_type) {
+    EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","VXLAN RIOT status default:%d conf:%d op:%d",
+               nas_switch_info.def_vxlan_riot_enable, conf_vxlan_riot_status, op_type);
+    if (nas_switch_info.def_vxlan_riot_enable == false)
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    if (op_type == cps_api_oper_DELETE) {
+        nas_switch_info.next_boot_vxlan_riot_enable = nas_switch_info.def_vxlan_riot_enable;
+        return STD_ERR_OK;
+    }
+    nas_switch_info.next_boot_vxlan_riot_enable = conf_vxlan_riot_status;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_max_vxlan_overlay_rifs_set(uint32_t conf_vxlan_overlay_rifs, cps_api_operation_types_t op_type) {
+    EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","VXLAN RIOT status default:%d rif-conf:%d op:%d rif-block-size:%d",
+               nas_switch_info.def_vxlan_riot_enable, conf_vxlan_overlay_rifs, op_type,
+               nas_switch_info.rif_block_size);
+    if ((nas_switch_info.def_vxlan_riot_enable == false) || (nas_switch_info.rif_block_size == 0))
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    if (op_type == cps_api_oper_DELETE) {
+        nas_switch_info.next_boot_max_vxlan_overlay_rifs = nas_switch_info.def_max_vxlan_overlay_rifs;
+        return STD_ERR_OK;
+    }
+    if (conf_vxlan_overlay_rifs % nas_switch_info.rif_block_size)
+        return STD_ERR(HALCOM,PARAM,e_std_err_code_PARAM);
+
+    nas_switch_info.next_boot_max_vxlan_overlay_rifs = conf_vxlan_overlay_rifs;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_max_vxlan_overlay_nhs_set(uint32_t conf_vxlan_overlay_nhs, cps_api_operation_types_t op_type) {
+    EV_LOGGING(NAS_COM, INFO, "NAS-CMN-SWITCH","VXLAN RIOT status default:%d nh-conf:%d op:%d nh-block-size:%d",
+               nas_switch_info.def_vxlan_riot_enable, conf_vxlan_overlay_nhs, op_type,
+               nas_switch_info.l3_nexthop_block_size);
+    if ((nas_switch_info.def_vxlan_riot_enable == false) || (nas_switch_info.l3_nexthop_block_size == 0))
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+    if (op_type == cps_api_oper_DELETE) {
+        nas_switch_info.next_boot_max_vxlan_overlay_nexthops = nas_switch_info.def_max_vxlan_overlay_nexthops;
+        return STD_ERR_OK;
+    }
+    if (conf_vxlan_overlay_nhs % nas_switch_info.l3_nexthop_block_size)
+        return STD_ERR(HALCOM,PARAM,e_std_err_code_PARAM);
+
+    nas_switch_info.next_boot_max_vxlan_overlay_nexthops = conf_vxlan_overlay_nhs;;
+    return STD_ERR_OK;
+}
+
+
+t_std_error nas_sw_profile_vxlan_riot_status_get(uint32_t *cur_vxlan_riot_status, uint32_t *conf_vxlan_riot_status) {
+
+    *cur_vxlan_riot_status = nas_switch_info.cur_vxlan_riot_enable;
+    *conf_vxlan_riot_status = nas_switch_info.next_boot_vxlan_riot_enable;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_max_vxlan_overlay_rifs_get(uint32_t *cur_vxlan_overlay_rifs, uint32_t *conf_vxlan_overlay_rifs) {
+    *cur_vxlan_overlay_rifs = nas_switch_info.cur_max_vxlan_overlay_rifs;
+    *conf_vxlan_overlay_rifs = nas_switch_info.next_boot_max_vxlan_overlay_rifs;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_max_vxlan_overlay_nhs_get(uint32_t *cur_vxlan_overlay_nhs, uint32_t *conf_vxlan_overlay_nhs) {
+    *cur_vxlan_overlay_nhs = nas_switch_info.cur_max_vxlan_overlay_nexthops;
+    *conf_vxlan_overlay_nhs = nas_switch_info.next_boot_max_vxlan_overlay_nexthops;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_rif_table_size_get(uint32_t *rif_table_size) {
+    if (nas_switch_info.rif_table_size == 0)
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+
+    *rif_table_size = nas_switch_info.rif_table_size;
+    return STD_ERR_OK;
+}
+
+t_std_error nas_sw_profile_l3_nexthop_table_size_get(uint32_t *l3_nexthop_table_size) {
+    if (nas_switch_info.l3_nexthop_table_size == 0)
+        return STD_ERR(HALCOM, PARAM, e_std_err_code_NOTSUPPORTED);
+
+    *l3_nexthop_table_size = nas_switch_info.l3_nexthop_table_size;
     return STD_ERR_OK;
 }
 

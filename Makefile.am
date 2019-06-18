@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Dell Inc.
+# Copyright (c) 2019 Dell Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -32,9 +32,10 @@ hshell_LDADD = -lopx_common
 pyutilsdir=$(libdir)/opx
 pyutils_SCRIPTS = scripts/lib/python/*.py
 
-lib_LTLIBRARIES=libopx_nas_common.la
+lib_LTLIBRARIES=libopx_nas_common.la libhal_common.la
 
-libopx_nas_common_la_SOURCES= src/hal_if_mapping.cpp src/nas_switch.c src/nas_switch_utl.cpp src/nas_base_utils.cpp src/nas_base_obj.cpp src/nas_base_ndi_utl.cpp src/nas_ndi_obj_id_table.cpp src/nas_if_utils.cpp src/nas_switch_profile.cpp src/nas_vrf_utils.cpp
+libopx_nas_common_la_SOURCES=src/hal_if_mapping.cpp src/nas_switch.c src/nas_switch_utl.cpp src/nas_base_utils.cpp src/nas_base_obj.cpp src/nas_base_ndi_utl.cpp src/nas_ndi_obj_id_table.cpp src/nas_if_utils.cpp src/nas_switch_profile.cpp src/nas_vrf_utils.cpp \
+src/nas_com_bridge_utils.cpp
 
 libopx_nas_common_la_CPPFLAGS= -D_FILE_OFFSET_BITS=64 -I$(top_srcdir)/inc/opx -I$(includedir)/opx $(COMMON_HARDEN_FLAGS) -fPIC
 
@@ -45,6 +46,18 @@ libopx_nas_common_la_CFLAGS=$(C_HARDEN_FLAGS)
 libopx_nas_common_la_LDFLAGS=-lpthread -shared -version-info 1:1:0 $(LD_HARDEN_FLAGS)
 
 libopx_nas_common_la_LIBADD=-lopx_common -lopx_cps_api_common -lopx_logging
+
+libhal_common_la_CPPFLAGS=-I$(top_srcdir)/inc/opx -I$(includedir)/opx $(COMMON_HARDEN_FLAGS) -fPIC
+
+libhal_common_la_CXXFLAGS=-std=c++11
+
+libhal_common_la_LDFLAGS=-lopx_common -lopx_logging -lopx_cps_api_common -lopx_cps_class_map
+
+libhal_common_la_SOURCES=src/hal_if_mapping.cpp src/nas_switch.c src/nas_switch_utl.cpp src/nas_switch_profile.cpp
+libhal_common_la_SOURCES+=src/nas_base_utils.cpp src/nas_base_obj.cpp src/nas_base_ndi_utl.cpp
+libhal_common_la_SOURCES+=src/nas_ndi_obj_id_table.cpp
+libhal_common_la_SOURCES+=src/nas_if_utils.cpp
+libhal_common_la_SOURCES+=src/nas_vrf_utils.cpp
 
 systemdconfdir=/lib/systemd/system
 systemdconf_DATA = scripts/init/*.service

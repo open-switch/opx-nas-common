@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Dell Inc.
+ * Copyright (c) 2019 Dell Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -23,6 +23,7 @@
 
 #include <gtest/gtest.h>
 
+#include "std_utils.h"
 #include "nas_switch.h"
 #include "std_config_node.h"
 #include "cps_api_operation.h"
@@ -78,7 +79,7 @@ int main() {
     }
     memset(current_profile, 0, sizeof(current_profile));
 
-    strncpy(current_profile, "unified", strlen("unified"));
+    safestrncpy(current_profile, "unified", sizeof(current_profile));
 
     if(nas_sw_profile_supported(0, current_profile) == 1)
     {
@@ -90,7 +91,7 @@ int main() {
     }
     memset(current_profile, 0, sizeof(current_profile));
 
-    strncpy(current_profile, "unified-50G", strlen("unified-50G"));
+    safestrncpy(current_profile, "unified-50G", sizeof(current_profile));
 
     if(nas_sw_profile_supported(0, current_profile) == 1)
     {
@@ -102,7 +103,7 @@ int main() {
     }
 
     memset(current_profile, 0, sizeof(current_profile));
-    strncpy(current_profile, "unified-50G", strlen("unified-50G"));
+    safestrncpy(current_profile, "unified-50G", sizeof(current_profile));
     if (nas_sw_profile_conf_profile_set(0, current_profile,
                                         cps_api_oper_SET) == STD_ERR_OK)
     {
